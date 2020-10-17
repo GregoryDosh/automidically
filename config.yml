@@ -1,0 +1,23 @@
+mapping:
+  0:
+    - filename: destiny2.exe
+    - filename: amidevil.exe
+    - filename: noita.exe
+  1:
+    - filename: chrome.exe
+    - filename: edge.exe
+  2:
+    - title: remote desktop
+    - filename: mstsc.exe
+  3:
+    - special: master
+    - speical: system
+  4:
+    - special: current
+  6:
+    - filename: discord.exe
+    - filename: zoom.exe
+  7:
+    - title: youtube music
+
+midi_devicename: nanoKONTROL2
