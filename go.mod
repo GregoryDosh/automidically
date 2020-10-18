@@ -15,5 +15,5 @@ require (
 	gitlab.com/gomidi/midi v1.20.1
 	gitlab.com/gomidi/rtmididrv v0.10.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
-	gopkg.in/yaml.v2 v2.3.0
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )
