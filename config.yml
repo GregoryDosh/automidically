@@ -15,13 +15,13 @@ mapping:
     - cc: 2
       filename:
       - mstsc.exe
-    - cc: 3
-      special:
-       - output
-       - current
-    - cc: 4
-      special:
-        - system
+    # - cc: 3
+    #   special:
+    #    - output
+    #    - current
+    # - cc: 4
+    #   special:
+    #     - system
     - cc: 5
       device:
         - Headphones
@@ -37,4 +37,4 @@ mapping:
       command:
         - dir
 
-midi_devicename: nanokontrol2
+midi_devicename: nanoKONTROL2

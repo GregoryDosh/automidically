@@ -46,9 +46,8 @@ func (m *Mapping) HandleMessage(c int, v int) {
 		return
 	}
 
-	valueRange := m.Max - m.Min
 	clampedValue := math.Max(m.Min, math.Min(m.Max, float64(v)))
-	newValue := float32(clampedValue / valueRange)
+	newValue := float32(clampedValue / m.Max)
 	if m.Reverse {
 		newValue = 1 - newValue
 	}
@@ -57,21 +56,27 @@ func (m *Mapping) HandleMessage(c int, v int) {
 	for _, s := range m.Special {
 		// output
 		if strings.EqualFold(s, "output") {
-			das.outputDevice.SetVolumeLevel(newValue)
+			if das.outputDevice != nil {
+				das.outputDevice.SetVolumeLevel(newValue)
+			}
 		}
 		// input
 		if strings.EqualFold(s, "input") {
-			das.inputDevice.SetVolumeLevel(newValue)
+			if das.inputDevice != nil {
+				das.inputDevice.SetVolumeLevel(newValue)
+			}
 		}
 		// system
 		if strings.EqualFold(s, "system") {
-			mpLog.Infof("System Volume Not Setup Yet %f", newValue)
+			if das.systemSession != nil {
+				das.systemSession.SetVolume(newValue)
+			}
 		}
 	}
 
 	// filename
 	for _, f := range m.Filename {
-		mpLog.Infof("Filename %s Logging Not Setup Yet %f", f, newValue)
+		changeSessionVolume(f, newValue)
 	}
 
 	// device

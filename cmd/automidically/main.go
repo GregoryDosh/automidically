@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
+	"github.com/orandin/lumberjackrus"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -44,6 +45,12 @@ func main() {
 				Value:   "info",
 			},
 			&cli.StringFlag{
+				EnvVars: []string{"LOG_PATH"},
+				Name:    "log_path",
+				Usage:   "Set a path for the log file. Set empty to disable.",
+				Value:   "automidically.log",
+			},
+			&cli.StringFlag{
 				EnvVars:     []string{"PROFILE_CPU"},
 				Name:        "profile_cpu",
 				Aliases:     []string{"pc"},
@@ -66,23 +73,39 @@ func main() {
 }
 
 func automidicallyMain(ctx *cli.Context) error {
+	var ll logrus.Level
 	switch ctx.String("log_level") {
 	case "trace", "t":
-		logrus.SetLevel(logrus.TraceLevel)
+		ll = logrus.TraceLevel
 	case "debug", "d":
-		logrus.SetLevel(logrus.DebugLevel)
+		ll = logrus.DebugLevel
 	case "info", "i":
-		logrus.SetLevel(logrus.InfoLevel)
+		ll = logrus.InfoLevel
 	case "warn", "w":
-		logrus.SetLevel(logrus.WarnLevel)
+		ll = logrus.WarnLevel
 	case "error", "e":
-		logrus.SetLevel(logrus.ErrorLevel)
+		ll = logrus.ErrorLevel
 	case "fatal", "f":
-		logrus.SetLevel(logrus.FatalLevel)
+		ll = logrus.FatalLevel
 	case "panic", "p":
-		logrus.SetLevel(logrus.PanicLevel)
+		ll = logrus.PanicLevel
 	default:
-		logrus.SetLevel(logrus.InfoLevel)
+		ll = logrus.InfoLevel
+	}
+	logrus.SetLevel(ll)
+
+	log_path := ctx.String("log_path")
+	if log_path != "" {
+		opts := &lumberjackrus.LogFile{
+			Filename:   log_path,
+			MaxSize:    10,
+			MaxBackups: 2,
+		}
+		hook, err := lumberjackrus.NewHook(opts, ll, &logrus.TextFormatter{}, nil)
+		if err != nil {
+			panic(err)
+		}
+		logrus.AddHook(hook)
 	}
 
 	log.Trace("Enter automidicallyMain")

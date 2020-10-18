@@ -12,8 +12,12 @@ type AudioSession struct {
 }
 
 func (a *AudioSession) Cleanup() {
+	mxaLog.Tracef("cleaning up %s", a.ProcessExecutable)
 	if a.simpleAudioVolume != nil {
 		a.simpleAudioVolume.Release()
+	}
+	if a.audioSessionControl2 != nil {
+		a.audioSessionControl2.Release()
 	}
 }
 

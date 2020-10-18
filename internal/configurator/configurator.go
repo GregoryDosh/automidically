@@ -25,6 +25,9 @@ func New(filename string) *Configurator {
 		refreshConfig: make(chan bool, 1),
 	}
 
+	// This should only be called one time to prep the Windows COM bindings.
+	mixer.InitializeEnvironment()
+
 	go c.updateConfigFromDiskLoop()
 	c.refreshConfig <- true
 
@@ -85,7 +88,7 @@ func (c *Configurator) updateConfigFromDiskLoop() {
 func (c *Configurator) readConfigFromDiskAndInit() {
 	log.Trace("Enter readConfigFromDiskAndInit")
 	defer log.Trace("Exit readConfigFromDiskAndInit")
-	log.Debugf("reading %s from disk", c.filename)
+	log.Infof("reading %s from disk", c.filename)
 
 	f, err := ioutil.ReadFile(c.filename)
 	if err != nil {
