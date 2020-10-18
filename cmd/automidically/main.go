@@ -114,11 +114,7 @@ func automidicallyMain(ctx *cli.Context) error {
 
 	connectMIDIDevice(configuratorInstance.MIDIDeviceName)
 
-	var err error
-	mixerInstance, err = mixer.New()
-	if err != nil {
-		log.Fatal(err)
-	}
+	mixerInstance = mixer.New()
 
 	systray.Run(systrayStart, systrayStop)
 	log.Info("Exiting...")
@@ -173,7 +169,6 @@ func connectMIDIDevice(name string) {
 			return
 		}
 		for msg := range msgs {
-			log.Tracef("Got message %+v", msg)
 			mixerInstance.HandleMessage(&mixer.Message{
 				Volume: float32(msg[1]) / 127,
 			})

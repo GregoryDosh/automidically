@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GregoryDosh/automidically/internal/configurator/mapper"
 	"github.com/bep/debounce"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
@@ -13,16 +14,10 @@ import (
 
 var log = logrus.WithField("module", "configurator")
 
-type MappingOption struct {
-	Filename string `yaml:"filename,omitempty"`
-	Title    string `yaml:"title,omitempty"`
-	Special  string `yaml:"special,omitempty"`
-}
-
 type Instance struct {
 	configLocation string
-	Mapping        map[int][]MappingOption `yaml:"mapping"`
-	MIDIDeviceName string                  `yaml:"midi_devicename"`
+	Mapping        *mapper.Instance `yaml:"mapping"`
+	MIDIDeviceName string           `yaml:"midi_devicename"`
 	subscribers    []chan bool
 	sync.Mutex
 }

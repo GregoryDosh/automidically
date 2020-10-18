@@ -1,3 +1,14 @@
+# filename is a full or partial match on the .exe name of a process.
+#   - chrome.exe
+#   - discord.exe
+# special options include
+#   - output -> Default output device
+#   - input -> Default input device
+#   - system -> System Sounds
+#   - current -> Current Active Window
+# device allows you to specify the volume mixer for a device based on the friendly name
+# Ex: Speakers (High Definition Audio Device)
+
 mapping:
   0:
     - filename: destiny2.exe
@@ -7,17 +18,17 @@ mapping:
     - filename: chrome.exe
     - filename: edge.exe
   2:
-    - title: remote desktop
     - filename: mstsc.exe
   3:
-    - special: master
-    - speical: system
-  4:
     - special: current
+  4:
+    - special: system
+  5:
+    - device: Headphones
   6:
     - filename: discord.exe
     - filename: zoom.exe
   7:
-    - title: youtube music
+    - filename: YouTube Music Desktop App.exe
 
 midi_devicename: nanoKONTROL2

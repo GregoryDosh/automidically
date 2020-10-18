@@ -26,6 +26,8 @@ github.com/go-ole/go-ole v1.2.4 h1:nNBDSCOigTSiarFpYE9J/KtEA1IOW4CNeqT9TQDqCxI=
 github.com/go-ole/go-ole v1.2.4/go.mod h1:XCwSNxSkXRo4vlyPy93sltvi/qJq0jqQhjqQNIwKuxM=
 github.com/go-stack/stack v1.8.0 h1:5SgMzNM5HxrEjV0ww2lTmX6E2Izsfxas4+YHWRs3Lsk=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
+github.com/mitchellh/go-ps v1.0.0 h1:i6ampVEEF4wQFF+bkYfwYgY+F/uYJDktmvLPf7qIgjc=
+github.com/mitchellh/go-ps v1.0.0/go.mod h1:J4lOc8z8yJs6vUwklHw2XEIiT4z4C40KtWVN3nvg8Pg=
 github.com/moutend/go-wca v0.2.0 h1:AEzY6ltC5zPCldKyMYdyXv3TaLqwxSW1TIradqNqRpU=
 github.com/moutend/go-wca v0.2.0/go.mod h1:L/ka++dPvkHYz0UuQ/PIQ3aTuecoXOIM1RSAesh6RYU=
 github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c h1:rp5dCmg/yLR3mgFuSOe4oEnDDmGLROTvMragMUXpTQw=
@@ -46,8 +48,6 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/urfave/cli/v2 v2.2.0 h1:JTTnM6wKzdA0Jqodd966MVj4vWbbquZykeX1sKbe2C4=
 github.com/urfave/cli/v2 v2.2.0/go.mod h1:SE9GqnLQmjVa0iPEY0f1w3ygNIYcIJ0OKPMoW2caLfQ=
 gitlab.com/gomidi/midi v1.16.4/go.mod h1:3ohtNOhqoSakkuLG/Li1OI6I3J1c2LErnJF5o/VBq1c=
-gitlab.com/gomidi/midi v1.19.3 h1:31nhd1opE1cqyVd1poszlYoMNTsAdmTYea+tT+PLFd8=
-gitlab.com/gomidi/midi v1.19.3/go.mod h1:3ohtNOhqoSakkuLG/Li1OI6I3J1c2LErnJF5o/VBq1c=
 gitlab.com/gomidi/midi v1.20.0 h1:EGHBOWeMsXNNzCNYgVsHV5B5rgWqAVPrDzXv06/NEps=
 gitlab.com/gomidi/midi v1.20.0/go.mod h1:3ohtNOhqoSakkuLG/Li1OI6I3J1c2LErnJF5o/VBq1c=
 gitlab.com/gomidi/rtmididrv v0.10.1 h1:BgqhFpBgythJqFbiR8QtL3CER1nh26YCUPFGVidS9gk=
