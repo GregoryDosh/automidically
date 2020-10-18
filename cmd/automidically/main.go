@@ -2,26 +2,23 @@ package main
 
 import (
 	"os"
+	"os/signal"
 	"runtime"
 	"runtime/pprof"
-
-	"github.com/getlantern/systray"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
-	"github.com/GregoryDosh/automidically/internal/midi"
-	"github.com/GregoryDosh/automidically/internal/mixer"
+	"github.com/GregoryDosh/automidically/internal/icon"
+	"github.com/getlantern/systray"
+	"github.com/orandin/lumberjackrus"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	profileCPUFilename    string
 	profileMemoryFilename string
 	log                   = logrus.WithField("module", "main")
-	globalConfigRefresh   = make(chan bool)
-	configuratorInstance  *configurator.Instance
-	midiDevice            *midi.Device
-	mixerInstance         *mixer.Instance
 )
 
 func main() {
@@ -32,13 +29,13 @@ func main() {
 		Authors: []*cli.Author{
 			{Name: "Gregory Dosh", Email: "GregoryDosh@users.noreply.github.com"},
 		},
-		Version: "0.1.0",
+		Version: "0.2.0",
 		Action:  automidicallyMain,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				EnvVars: []string{"CONFIG_FILENAME"},
-				Name:    "config_filename",
-				Aliases: []string{"c", "f"},
+				Name:    "config",
+				Aliases: []string{"c", "f", "config_filename", "filename"},
 				Usage:   "specify the yml configuration location",
 				Value:   "config.yml",
 			},
@@ -48,6 +45,12 @@ func main() {
 				Aliases: []string{"l"},
 				Usage:   "trace, debug, info, warn, error, fatal, panic",
 				Value:   "info",
+			},
+			&cli.StringFlag{
+				EnvVars: []string{"LOG_PATH"},
+				Name:    "log_path",
+				Usage:   "Set a path for the log file. Set empty to disable.",
+				Value:   "automidically.log",
 			},
 			&cli.StringFlag{
 				EnvVars:     []string{"PROFILE_CPU"},
@@ -72,6 +75,43 @@ func main() {
 }
 
 func automidicallyMain(ctx *cli.Context) error {
+	var ll logrus.Level
+	switch ctx.String("log_level") {
+	case "trace", "t":
+		ll = logrus.TraceLevel
+	case "debug", "d":
+		ll = logrus.DebugLevel
+	case "info", "i":
+		ll = logrus.InfoLevel
+	case "warn", "w":
+		ll = logrus.WarnLevel
+	case "error", "e":
+		ll = logrus.ErrorLevel
+	case "fatal", "f":
+		ll = logrus.FatalLevel
+	case "panic", "p":
+		ll = logrus.PanicLevel
+	default:
+		ll = logrus.InfoLevel
+	}
+	logrus.SetLevel(ll)
+
+	log_path := ctx.String("log_path")
+	if log_path != "" {
+		opts := &lumberjackrus.LogFile{
+			Filename:   log_path,
+			MaxSize:    10,
+			MaxBackups: 2,
+		}
+		hook, err := lumberjackrus.NewHook(opts, ll, &logrus.TextFormatter{}, nil)
+		if err != nil {
+			panic(err)
+		}
+		logrus.AddHook(hook)
+	}
+
+	log.Trace("Enter automidicallyMain")
+	defer log.Trace("Exit automidicallyMain")
 	if profileCPUFilename != "" {
 		f, err := os.Create(profileCPUFilename)
 		if err != nil {
@@ -85,36 +125,12 @@ func automidicallyMain(ctx *cli.Context) error {
 		defer log.Infof("wrote CPU profile to %s", profileCPUFilename)
 	}
 
-	switch ctx.String("log_level") {
-	case "trace":
-		logrus.SetLevel(logrus.TraceLevel)
-	case "debug":
-		logrus.SetLevel(logrus.DebugLevel)
-	case "info":
-		logrus.SetLevel(logrus.InfoLevel)
-	case "warn":
-		logrus.SetLevel(logrus.WarnLevel)
-	case "error":
-		logrus.SetLevel(logrus.ErrorLevel)
-	case "fatal":
-		logrus.SetLevel(logrus.FatalLevel)
-	case "panic":
-		logrus.SetLevel(logrus.PanicLevel)
-	default:
-		logrus.SetLevel(logrus.InfoLevel)
-	}
-
 	log.WithFields(logrus.Fields{
 		"version":       ctx.App.Version,
 		"documentation": "https://github.com/GregoryDosh/automidically",
 	}).Info()
 
-	configuratorInstance = configurator.New(ctx.String("config_filename"))
-	go configuratorEventLoop()
-
-	connectMIDIDevice(configuratorInstance.MIDIDeviceName)
-
-	mixerInstance = mixer.New()
+	configurator.New(ctx.String("config"))
 
 	systray.Run(systrayStart, systrayStop)
 	log.Info("Exiting...")
@@ -135,44 +151,42 @@ func automidicallyMain(ctx *cli.Context) error {
 	return nil
 }
 
-func configuratorEventLoop() {
-	log := log.WithField("function", "configuratorEventLoop")
-	updates := configuratorInstance.SubscribeToChanges()
-	for {
-		select {
-		case <-globalConfigRefresh:
-			configuratorInstance.ReadConfigFromDisk()
-		case <-updates:
-			log.Info("Got Update!")
-			if midiDevice != nil {
-				midiDevice.Cleanup()
-				midiDevice = nil
-			}
-			connectMIDIDevice(configuratorInstance.MIDIDeviceName)
+func systrayStart() {
+	log := log.WithField("function", "systrayStart")
 
-			log.Info(configuratorInstance.Mapping)
+	systray.SetIcon(icon.Main)
+	systray.SetTitle("AutoMIDIcally")
+	systray.SetTooltip("AutoMIDIcally")
+
+	mReloadConfig := systray.AddMenuItem("Reload Config", "Manual reload config.yml")
+	mReloadDevices := systray.AddMenuItem("Reload Devices", "Manual reload hardware devices")
+	mReloadSessions := systray.AddMenuItem("Reload Sessions", "Manual reload audio sessions")
+
+	systray.AddSeparator()
+	mQuit := systray.AddMenuItem("Quit", "Quit AutoMIDIcally")
+
+	sigintc := make(chan os.Signal, 1)
+	signal.Notify(sigintc, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		defer systray.Quit()
+		defer log.Debug("quitting systray")
+		for {
+			select {
+			case <-mReloadConfig.ClickedCh:
+				log.Debug("reload config clicked")
+			case <-mReloadDevices.ClickedCh:
+				log.Debug("reload devices clicked")
+			case <-mReloadSessions.ClickedCh:
+				log.Debug("reload sessions clicked")
+			case <-sigintc:
+				return
+			case <-mQuit.ClickedCh:
+				return
+			}
 		}
-	}
+	}()
 }
 
-func connectMIDIDevice(name string) {
-	log := log.WithField("function", "connectMIDIDevice")
-	var err error
-	midiDevice, err = midi.New(name)
-	if err != nil {
-		log.Error(err)
-	}
-	go func() {
-		msgs, err := midiDevice.SubscribeToMessages()
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		for msg := range msgs {
-			mixerInstance.HandleMessage(&mixer.Message{
-				Volume: float32(msg[1]) / 127,
-			})
-		}
-		log.Debug("closing stale message handler")
-	}()
+func systrayStop() {
 }

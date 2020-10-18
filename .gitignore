@@ -13,6 +13,15 @@
 
 # Profiling Output
 *.pprof
+*.pdf
+
+# Log output
+*.log
+
+# Ignore YAMl except example
+*.yml
+*.yaml
+!example_config.yml
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
