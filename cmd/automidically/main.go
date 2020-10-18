@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
+	"github.com/GregoryDosh/automidically/internal/icon"
+	"github.com/getlantern/systray"
 	"github.com/orandin/lumberjackrus"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -130,10 +132,7 @@ func automidicallyMain(ctx *cli.Context) error {
 
 	configurator.New(ctx.String("config"))
 
-	sigintc := make(chan os.Signal, 1)
-	signal.Notify(sigintc, os.Interrupt, syscall.SIGTERM)
-
-	<-sigintc
+	systray.Run(systrayStart, systrayStop)
 	log.Info("Exiting...")
 
 	if profileMemoryFilename != "" {
@@ -150,4 +149,44 @@ func automidicallyMain(ctx *cli.Context) error {
 	}
 
 	return nil
+}
+
+func systrayStart() {
+	log := log.WithField("function", "systrayStart")
+
+	systray.SetIcon(icon.Main)
+	systray.SetTitle("AutoMIDIcally")
+	systray.SetTooltip("AutoMIDIcally")
+
+	mReloadConfig := systray.AddMenuItem("Reload Config", "Manual reload config.yml")
+	mReloadDevices := systray.AddMenuItem("Reload Devices", "Manual reload hardware devices")
+	mReloadSessions := systray.AddMenuItem("Reload Sessions", "Manual reload audio sessions")
+
+	systray.AddSeparator()
+	mQuit := systray.AddMenuItem("Quit", "Quit AutoMIDIcally")
+
+	sigintc := make(chan os.Signal, 1)
+	signal.Notify(sigintc, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		defer systray.Quit()
+		defer log.Debug("quitting systray")
+		for {
+			select {
+			case <-mReloadConfig.ClickedCh:
+				log.Debug("reload config clicked")
+			case <-mReloadDevices.ClickedCh:
+				log.Debug("reload devices clicked")
+			case <-mReloadSessions.ClickedCh:
+				log.Debug("reload sessions clicked")
+			case <-sigintc:
+				return
+			case <-mQuit.ClickedCh:
+				return
+			}
+		}
+	}()
+}
+
+func systrayStop() {
 }

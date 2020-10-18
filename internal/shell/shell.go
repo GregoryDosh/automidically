@@ -1,16 +1,14 @@
 package shell
 
 import (
-	"strings"
-
 	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.WithField("module", "shell")
 
 type Mapping struct {
-	Cc      int      `yaml:"cc"`
-	Command []string `yaml:"command"`
+	Cc      int    `yaml:"cc"`
+	Command string `yaml:"command"`
 }
 
 func (m *Mapping) Cleanup() {
@@ -28,5 +26,5 @@ func (m *Mapping) HandleMessage(c int, v int) {
 		return
 	}
 
-	log.Infof("This would execute %s", strings.Join(m.Command, "\n"))
+	log.Infof("Not implemented yet, but this would execute %s", m.Command)
 }

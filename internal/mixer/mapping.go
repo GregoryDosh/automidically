@@ -6,13 +6,13 @@ import (
 )
 
 type Mapping struct {
-	Cc       int      `yaml:"cc"`
-	Reverse  bool     `yaml:"reverse,omitempty"`
-	Min      float64  `yaml:"min,omitempty"`
-	Max      float64  `yaml:"max,omitempty"`
-	Filename []string `yaml:"filename,omitempty"`
-	Special  []string `yaml:"special,omitempty"`
-	Device   []string `yaml:"device,omitempty"`
+	Cc       int     `yaml:"cc"`
+	Reverse  bool    `yaml:"reverse,omitempty"`
+	Min      float64 `yaml:"min,omitempty"`
+	Max      float64 `yaml:"max,omitempty"`
+	Filename string  `yaml:"filename,omitempty"`
+	Special  string  `yaml:"special,omitempty"`
+	Device   string  `yaml:"device,omitempty"`
 }
 
 func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -53,21 +53,29 @@ func (m *Mapping) HandleMessage(c int, v int) {
 	}
 
 	// special
-	for _, s := range m.Special {
+	if m.Special != "" {
+		// refresh_devices
+		if strings.EqualFold(m.Special, "refresh_devices") {
+			das.refreshDevices <- true
+		}
+		// refresh_sessions
+		if strings.EqualFold(m.Special, "refresh_sessions") {
+			das.refreshSessions <- true
+		}
 		// output
-		if strings.EqualFold(s, "output") {
+		if strings.EqualFold(m.Special, "output") {
 			if das.outputDevice != nil {
 				das.outputDevice.SetVolumeLevel(newValue)
 			}
 		}
 		// input
-		if strings.EqualFold(s, "input") {
+		if strings.EqualFold(m.Special, "input") {
 			if das.inputDevice != nil {
 				das.inputDevice.SetVolumeLevel(newValue)
 			}
 		}
 		// system
-		if strings.EqualFold(s, "system") {
+		if strings.EqualFold(m.Special, "system") {
 			if das.systemSession != nil {
 				das.systemSession.SetVolume(newValue)
 			}
@@ -75,12 +83,12 @@ func (m *Mapping) HandleMessage(c int, v int) {
 	}
 
 	// filename
-	for _, f := range m.Filename {
-		changeSessionVolume(f, newValue)
+	if m.Filename != "" {
+		changeSessionVolume(m.Filename, newValue)
 	}
 
 	// device
-	for _, f := range m.Device {
-		mpLog.Infof("Device %s Logging Not Setup Yet %f", f, newValue)
+	if m.Device != "" {
+		mpLog.Infof("Device %s Logging Not Setup Yet %f", m.Device, newValue)
 	}
 }
