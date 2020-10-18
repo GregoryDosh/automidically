@@ -2,8 +2,11 @@ package hardware
 
 import (
 	"fmt"
+	"sync"
+	"time"
 	"unsafe"
 
+	"github.com/bep/debounce"
 	"github.com/go-ole/go-ole"
 	"github.com/mitchellh/go-ps"
 	"github.com/moutend/go-wca/pkg/wca"
@@ -55,11 +58,13 @@ func (a *AudioSession) SetVolume(v float32) bool {
 }
 
 type Device struct {
-	AudioSessions []*AudioSession
-	mmd           *wca.IMMDevice
-	aev           *wca.IAudioEndpointVolume
-	deviceName    string
-	isOutput      bool
+	AudioSessions   []*AudioSession
+	mmd             *wca.IMMDevice
+	aev             *wca.IAudioEndpointVolume
+	refreshSessions chan bool
+	deviceName      string
+	isOutput        bool
+	sync.Mutex
 }
 
 func (d *Device) DeviceName() (string, bool) {
@@ -117,15 +122,42 @@ func (d *Device) Cleanup() {
 		d.mmd.Release()
 		d.mmd = nil
 	}
+	if d.refreshSessions != nil {
+		close(d.refreshSessions)
+	}
+}
+
+func (d *Device) refreshSessionsLoop() {
+	log.Trace("starting refreshSessionsLoop")
+	defer log.Trace("quitting refreshSessionsLoop")
+	deb := debounce.New(time.Second * 1)
+	t := time.NewTicker(time.Second * 30)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			deb(d.refreshAudioSessions)
+		case _, ok := <-d.refreshSessions:
+			if !ok {
+				return
+			}
+			deb(d.refreshAudioSessions)
+		}
+	}
 }
 
 func (d *Device) refreshAudioSessions() {
+	if !d.isOutput {
+		return
+	}
+	d.Lock()
 	for _, as := range d.AudioSessions {
 		as.Cleanup()
 	}
 	d.AudioSessions = nil
+	d.Unlock()
 
-	log.Trace("finding output audio sessions")
+	log.Info("refreshing audio sessions")
 
 	var audioSessionManager2 *wca.IAudioSessionManager2
 	if err := d.mmd.Activate(wca.IID_IAudioSessionManager2, wca.CLSCTX_ALL, nil, &audioSessionManager2); err != nil {
@@ -146,7 +178,9 @@ func (d *Device) refreshAudioSessions() {
 		log.Warnf("failed to get audio session count: %v", err)
 		return
 	}
-	log.Debugf("%d audio sessions detected", audioSessionCount)
+
+	dn, _ := d.DeviceName()
+	log.Debugf("%d audio sessions detected for %s", audioSessionCount, dn)
 
 	for i := 0; i < audioSessionCount; i++ {
 		var audioSessionControl *wca.IAudioSessionControl
@@ -186,21 +220,24 @@ func (d *Device) refreshAudioSessions() {
 			continue
 		}
 
+		d.Lock()
 		d.AudioSessions = append(d.AudioSessions, &AudioSession{
 			audioSessionControl2: audioSessionControl2,
 			simpleAudioVolume:    simpleAudioVolume,
 			ProcessExecutable:    process.Executable(),
 		})
+		d.Unlock()
 
 		log.Tracef("added audioSession %s", process.Executable())
 	}
-
 }
 
 func new(imde *wca.IMMDeviceEnumerator, isOutput bool) (*Device, error) {
 	d := &Device{
-		isOutput: isOutput,
+		refreshSessions: make(chan bool, 10),
+		isOutput:        isOutput,
 	}
+	go d.refreshSessionsLoop()
 
 	var deviceNumber uint32
 	var dtype string
@@ -225,7 +262,7 @@ func new(imde *wca.IMMDeviceEnumerator, isOutput bool) (*Device, error) {
 	}
 
 	if d.isOutput {
-		d.refreshAudioSessions()
+		d.refreshSessions <- true
 	}
 
 	return d, nil

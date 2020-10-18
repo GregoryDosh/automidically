@@ -44,7 +44,7 @@ func New(deviceName string) (*Device, error) {
 
 	for _, d := range midiDevices {
 		log.Debugf("found device %s", d.String())
-		if strings.Contains(d.String(), deviceName) {
+		if strings.Contains(strings.ToLower(d.String()), strings.ToLower(deviceName)) {
 			log.Infof("using device %s", d.String())
 			nd := &Device{
 				driver:     drv,

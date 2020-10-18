@@ -96,15 +96,15 @@ func (i *Instance) initialize() error {
 
 func (i *Instance) refreshDeviceLoop() {
 	log.Debug("starting refreshDeviceLoop")
+	defer log.Debug("stopping refreshDeviceLoop")
 	d := debounce.New(time.Second * 1)
-	for {
-		<-i.refreshDevices
+	for range i.refreshDevices {
 		d(i.refreshHardwareDevices)
 	}
 }
 
 func (i *Instance) refreshHardwareDevices() {
-	log.Debug("refreshing hardware devices")
+	log.Info("refreshing hardware devices")
 
 	// Cleanup previous devices
 	if i.defaultOutput != nil {

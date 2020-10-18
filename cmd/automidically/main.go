@@ -129,7 +129,7 @@ func automidicallyMain(ctx *cli.Context) error {
 		if err := pprof.WriteHeapProfile(f); err != nil {
 			log.Fatal("could not write memory profile: ", err)
 		}
-		log.Infof("wrote Memory profile to %s", profileMemoryFilename)
+		log.Infof("wrote memory profile to %s", profileMemoryFilename)
 	}
 
 	return nil
