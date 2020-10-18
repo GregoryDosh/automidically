@@ -1,125 +1,139 @@
 package mixer
 
 import (
-	"strings"
+	"os"
+	"sync"
 	"time"
 
-	"github.com/GregoryDosh/automidically/internal/mixer/hardware"
 	"github.com/bep/debounce"
 	ole "github.com/go-ole/go-ole"
 	"github.com/moutend/go-wca/pkg/wca"
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("module", "mixer")
-
-type Message struct {
-	Channel string
-	Volume  float32
-}
-
-type Instance struct {
-	mmDeviceEnumerator *wca.IMMDeviceEnumerator
-
-	defaultInput   *hardware.Device
-	defaultOutput  *hardware.Device
-	refreshDevices chan bool
-}
-
-func New() *Instance {
-	i := &Instance{
-		refreshDevices: make(chan bool, 10),
+var (
+	mxLog  = logrus.WithField("module", "mixer")
+	mpLog  = logrus.WithField("module", "mixer.mapping")
+	mxaLog = logrus.WithField("module", "mixer.audiosession")
+	mxdLog = logrus.WithField("module", "mixer.devices")
+	das    = &devicesAndSessions{
+		refresh: make(chan bool, 10),
 	}
-	err := i.initialize()
-	if err != nil {
-		log.Fatal(err)
-	}
-	go i.refreshDeviceLoop()
-	i.refreshDevices <- true
-	return i
+)
+
+type devicesAndSessions struct {
+	inputDevice         *Device
+	outputDevice        *Device
+	sessions            map[string]AudioSession
+	immDeviceEnumerator *wca.IMMDeviceEnumerator
+	refresh             chan bool
+	sync.Mutex
 }
 
-func (i *Instance) HandleMessage(m *Message) {
-	for _, as := range i.defaultOutput.AudioSessions {
-		if strings.Contains(strings.ToLower(as.ProcessExecutable), "discord") {
-			if ok := as.SetVolume(m.Volume); !ok {
-				log.Debug("audio sessions stale")
-				i.refreshDevices <- true
-			}
-		}
-	}
-
-}
-
-func (i *Instance) initialize() error {
+func init() {
 	// CoInitializeEx must be called at least once, and is usually called only once, for each thread that uses the COM library.
 	// https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex
 	if err := ole.CoInitializeEx(0, ole.COINIT_MULTITHREADED); err != nil {
 		if err.(*ole.OleError).Code() == 1 {
-			log.Fatalf("CoInitializeEX returned S_FALSE -> Already initialized on this thread.")
+			mxLog.Error("CoInitializeEX returned S_FALSE -> Already initialized on this threa")
+			os.Exit(1)
+
 		} else {
-			return err
+			mxLog.Fatal(err)
+			os.Exit(1)
 		}
 	}
 
 	// Enables audio clients to discover audio endpoint devices.
 	// https://docs.microsoft.com/en-us/windows/win32/coreaudio/mmdevice-api
-	if err := wca.CoCreateInstance(wca.CLSID_MMDeviceEnumerator, 0, wca.CLSCTX_ALL, wca.IID_IMMDeviceEnumerator, &i.mmDeviceEnumerator); err != nil {
-		log.Fatalf("CoCreateInstance failed to create MMDeviceEnumerator %s", err)
-		return err
+	if err := wca.CoCreateInstance(wca.CLSID_MMDeviceEnumerator, 0, wca.CLSCTX_ALL, wca.IID_IMMDeviceEnumerator, &das.immDeviceEnumerator); err != nil {
+		mxLog.Fatalf("CoCreateInstance failed to create MMDeviceEnumerator %s", err)
+		os.Exit(1)
 	}
 
-	// Create a debounced notification callback for when default devices are changed.
+	// Create a debounced notification callback for when default devices are change
 	var debouncedDeviceStateChanged = func(pwstrDeviceId string, dwNewState uint64) error {
-		log.Trace("detected changed default devices")
-		i.refreshDevices <- true
+		mxLog.Trace("detected changed default devices")
+		das.refresh <- true
 		return nil
 	}
 
 	var debouncedDefaultDeviceChanged = func(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
-		log.Trace("detected changed default devices")
-		i.refreshDevices <- true
+		mxLog.Trace("detected changed default devices")
+		das.refresh <- true
 		return nil
 	}
 
-	if err := i.mmDeviceEnumerator.RegisterEndpointNotificationCallback(wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
+	if err := das.immDeviceEnumerator.RegisterEndpointNotificationCallback(wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
 		OnDeviceStateChanged:   debouncedDeviceStateChanged,
 		OnDefaultDeviceChanged: debouncedDefaultDeviceChanged,
 	})); err != nil {
-		log.Error(err)
-		return err
+		mxLog.Error(err)
+		os.Exit(1)
 	}
 
-	log.Debug("initialized COM bindings")
-	return nil
+	go handleChangedDeviceLoop()
+	das.refresh <- true
 }
 
-func (i *Instance) refreshDeviceLoop() {
-	log.Debug("starting refreshDeviceLoop")
-	defer log.Debug("stopping refreshDeviceLoop")
+func handleChangedDeviceLoop() {
+	mxdLog.Trace("Enter handleChangedDeviceLoop")
+	defer mxdLog.Trace("Exit handleChangedDeviceLoop")
 	d := debounce.New(time.Second * 1)
-	for range i.refreshDevices {
-		d(i.refreshHardwareDevices)
+	for range das.refresh {
+		mxdLog.Debug("default audio devices change detected")
+		d(refreshHardwareDevices)
 	}
 }
 
-func (i *Instance) refreshHardwareDevices() {
-	log.Info("refreshing hardware devices")
-
-	// Cleanup previous devices
-	if i.defaultOutput != nil {
-		log.Trace("cleanup defaultOutput")
-		i.defaultOutput.Cleanup()
-		i.defaultOutput = nil
+func cleanupDevices() {
+	mxdLog.Trace("Enter cleanupDevices")
+	defer mxdLog.Trace("Exit cleanupDevices")
+	if das.outputDevice != nil {
+		das.outputDevice.Cleanup()
+		das.outputDevice = nil
 	}
-	if i.defaultInput != nil {
-		log.Trace("cleanup defaultInput")
-		i.defaultInput.Cleanup()
-		i.defaultInput = nil
+	if das.inputDevice != nil {
+		das.inputDevice.Cleanup()
+		das.inputDevice = nil
+	}
+}
+
+func refreshHardwareDevices() {
+	mxdLog.Trace("Enter refreshHardwareDevices")
+	defer mxdLog.Trace("Exit refreshHardwareDevices")
+
+	das.Lock()
+	defer das.Unlock()
+
+	// Remove all stale and old pointers to things before creating new
+	cleanupDevices()
+	das.outputDevice = &Device{}
+	das.inputDevice = &Device{}
+
+	// Default Output Device
+	if err := das.immDeviceEnumerator.GetDefaultAudioEndpoint(wca.ERender, wca.EConsole, &das.outputDevice.mmd); err != nil {
+		mxdLog.Warn("no default output device detected")
+		return
+	}
+	if err := das.outputDevice.mmd.Activate(wca.IID_IAudioEndpointVolume, wca.CLSCTX_ALL, nil, &das.outputDevice.aev); err != nil {
+		mxdLog.Warnf("output device has no volume endpoint")
+		return
+	}
+	if name, ok := das.outputDevice.DeviceName(); ok {
+		mxdLog.Infof("using default output device named: %s", name)
 	}
 
-	// Find New Devices
-	i.defaultOutput, _ = hardware.NewOutput(i.mmDeviceEnumerator)
-	i.defaultInput, _ = hardware.NewInput(i.mmDeviceEnumerator)
-
+	// Default Input Device
+	if err := das.immDeviceEnumerator.GetDefaultAudioEndpoint(wca.ECapture, wca.EConsole, &das.inputDevice.mmd); err != nil {
+		mxdLog.Warn("no default input device detected")
+		return
+	}
+	if err := das.inputDevice.mmd.Activate(wca.IID_IAudioEndpointVolume, wca.CLSCTX_ALL, nil, &das.inputDevice.aev); err != nil {
+		mxdLog.Warnf("input device has no volume endpoint")
+		return
+	}
+	if name, ok := das.inputDevice.DeviceName(); ok {
+		mxdLog.Infof("using default input device named: %s", name)
+	}
 }

@@ -2,26 +2,20 @@ package main
 
 import (
 	"os"
+	"os/signal"
 	"runtime"
 	"runtime/pprof"
-
-	"github.com/getlantern/systray"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
-	"github.com/GregoryDosh/automidically/internal/midi"
-	"github.com/GregoryDosh/automidically/internal/mixer"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	profileCPUFilename    string
 	profileMemoryFilename string
 	log                   = logrus.WithField("module", "main")
-	globalConfigRefresh   = make(chan bool)
-	configuratorInstance  *configurator.Instance
-	midiDevice            *midi.Device
-	mixerInstance         *mixer.Instance
 )
 
 func main() {
@@ -32,13 +26,13 @@ func main() {
 		Authors: []*cli.Author{
 			{Name: "Gregory Dosh", Email: "GregoryDosh@users.noreply.github.com"},
 		},
-		Version: "0.1.0",
+		Version: "0.2.0",
 		Action:  automidicallyMain,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				EnvVars: []string{"CONFIG_FILENAME"},
-				Name:    "config_filename",
-				Aliases: []string{"c", "f"},
+				Name:    "config",
+				Aliases: []string{"c", "f", "config_filename", "filename"},
 				Usage:   "specify the yml configuration location",
 				Value:   "config.yml",
 			},
@@ -72,6 +66,27 @@ func main() {
 }
 
 func automidicallyMain(ctx *cli.Context) error {
+	switch ctx.String("log_level") {
+	case "trace", "t":
+		logrus.SetLevel(logrus.TraceLevel)
+	case "debug", "d":
+		logrus.SetLevel(logrus.DebugLevel)
+	case "info", "i":
+		logrus.SetLevel(logrus.InfoLevel)
+	case "warn", "w":
+		logrus.SetLevel(logrus.WarnLevel)
+	case "error", "e":
+		logrus.SetLevel(logrus.ErrorLevel)
+	case "fatal", "f":
+		logrus.SetLevel(logrus.FatalLevel)
+	case "panic", "p":
+		logrus.SetLevel(logrus.PanicLevel)
+	default:
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
+	log.Trace("Enter automidicallyMain")
+	defer log.Trace("Exit automidicallyMain")
 	if profileCPUFilename != "" {
 		f, err := os.Create(profileCPUFilename)
 		if err != nil {
@@ -85,38 +100,17 @@ func automidicallyMain(ctx *cli.Context) error {
 		defer log.Infof("wrote CPU profile to %s", profileCPUFilename)
 	}
 
-	switch ctx.String("log_level") {
-	case "trace":
-		logrus.SetLevel(logrus.TraceLevel)
-	case "debug":
-		logrus.SetLevel(logrus.DebugLevel)
-	case "info":
-		logrus.SetLevel(logrus.InfoLevel)
-	case "warn":
-		logrus.SetLevel(logrus.WarnLevel)
-	case "error":
-		logrus.SetLevel(logrus.ErrorLevel)
-	case "fatal":
-		logrus.SetLevel(logrus.FatalLevel)
-	case "panic":
-		logrus.SetLevel(logrus.PanicLevel)
-	default:
-		logrus.SetLevel(logrus.InfoLevel)
-	}
-
 	log.WithFields(logrus.Fields{
 		"version":       ctx.App.Version,
 		"documentation": "https://github.com/GregoryDosh/automidically",
 	}).Info()
 
-	configuratorInstance = configurator.New(ctx.String("config_filename"))
-	go configuratorEventLoop()
+	configurator.New(ctx.String("config"))
 
-	connectMIDIDevice(configuratorInstance.MIDIDeviceName)
+	sigintc := make(chan os.Signal, 1)
+	signal.Notify(sigintc, os.Interrupt, syscall.SIGTERM)
 
-	mixerInstance = mixer.New()
-
-	systray.Run(systrayStart, systrayStop)
+	<-sigintc
 	log.Info("Exiting...")
 
 	if profileMemoryFilename != "" {
@@ -133,46 +127,4 @@ func automidicallyMain(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func configuratorEventLoop() {
-	log := log.WithField("function", "configuratorEventLoop")
-	updates := configuratorInstance.SubscribeToChanges()
-	for {
-		select {
-		case <-globalConfigRefresh:
-			configuratorInstance.ReadConfigFromDisk()
-		case <-updates:
-			log.Info("Got Update!")
-			if midiDevice != nil {
-				midiDevice.Cleanup()
-				midiDevice = nil
-			}
-			connectMIDIDevice(configuratorInstance.MIDIDeviceName)
-
-			log.Info(configuratorInstance.Mapping)
-		}
-	}
-}
-
-func connectMIDIDevice(name string) {
-	log := log.WithField("function", "connectMIDIDevice")
-	var err error
-	midiDevice, err = midi.New(name)
-	if err != nil {
-		log.Error(err)
-	}
-	go func() {
-		msgs, err := midiDevice.SubscribeToMessages()
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		for msg := range msgs {
-			mixerInstance.HandleMessage(&mixer.Message{
-				Volume: float32(msg[1]) / 127,
-			})
-		}
-		log.Debug("closing stale message handler")
-	}()
 }

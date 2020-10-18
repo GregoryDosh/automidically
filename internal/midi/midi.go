@@ -1,13 +1,10 @@
 package midi
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
-
 	gomidi "gitlab.com/gomidi/midi"
 	driver "gitlab.com/gomidi/rtmididrv"
 )
@@ -15,67 +12,22 @@ import (
 var log = logrus.WithField("module", "midi")
 
 type Device struct {
-	driver       *driver.Driver
-	device       gomidi.In
-	deviceName   string
-	subscribers  []chan [2]byte
-	deviceIsOpen bool
+	DeviceName string
+
+	messageCallback func(int, int)
+	messageChan     chan [2]int
+	driver          *driver.Driver
+	device          gomidi.In
 	sync.Mutex
 }
 
-func New(deviceName string) (*Device, error) {
-	log.Debug("gathering midi devices")
-
-	if deviceName == "" {
-		return nil, errors.New("missing midi deviceName")
-	} else {
-		log.Debugf("looking for %s", deviceName)
-	}
-
-	drv, err := driver.New()
-	if err != nil {
-		return nil, fmt.Errorf("unable to open midi driver: %w", err)
-	}
-
-	midiDevices, err := drv.Ins()
-	if err != nil {
-		return nil, fmt.Errorf("unable to open midi inputs: %w", err)
-	}
-
-	for _, d := range midiDevices {
-		log.Debugf("found device %s", d.String())
-		if strings.Contains(strings.ToLower(d.String()), strings.ToLower(deviceName)) {
-			log.Infof("using device %s", d.String())
-			nd := &Device{
-				driver:     drv,
-				device:     d,
-				deviceName: d.String(),
-			}
-			go nd.startCommunication()
-			return nd, nil
-		}
-	}
-
-	drv.Close()
-	return nil, fmt.Errorf("unable to find midi input device: %s", deviceName)
-}
-
-func (d *Device) startCommunication() {
-	err := d.device.Open()
-	if err != nil {
-		log.Error(err)
-	}
-
-	err = d.device.SetListener(d.dispatchMessage)
-	if err != nil {
-		log.Error(err)
-	}
-	d.deviceIsOpen = true
-	log.Debugf("opened midi device %s", d.deviceName)
-}
-
 func (d *Device) Cleanup() {
-	log.Debugf("stopping & cleaning up device %s", d.deviceName)
+	log.Trace("Enter Cleanup")
+	defer log.Trace("Exit Cleanup")
+
+	if d.messageChan != nil {
+		close(d.messageChan)
+	}
 	d.Lock()
 	defer d.Unlock()
 	if d.device != nil {
@@ -86,29 +38,81 @@ func (d *Device) Cleanup() {
 		d.driver.Close()
 		d.driver = nil
 	}
-	for _, s := range d.subscribers {
-		close(s)
+	if d.messageCallback != nil {
+		d.messageCallback = nil
 	}
-	d.subscribers = nil
 }
 
-func (d *Device) dispatchMessage(m []byte, t int64) {
-	if len(m) == 3 {
-		d.Lock()
-		defer d.Unlock()
-		for _, s := range d.subscribers {
-			s <- [2]byte{m[1], m[2]}
+func (d *Device) SetMessageCallback(cb func(int, int)) {
+	log.Trace("Enter SetMessageCallback")
+	defer log.Trace("Exit SetMessageCallback")
+	d.Lock()
+	defer d.Unlock()
+	d.messageCallback = cb
+}
+
+func (d *Device) handleMessageLoop() {
+	log.Trace("Enter handleMessageLoop")
+	defer log.Trace("Exit handleMessageLoop")
+
+	if err := d.device.Open(); err != nil {
+		log.Error(err)
+	}
+
+	if err := d.device.SetListener(func(data []byte, deltaMicroseconds int64) {
+		if len(data) == 3 {
+			d.messageChan <- [2]int{int(data[1]), int(data[2])}
+		}
+	}); err != nil {
+		log.Error(err)
+	}
+
+	for msg := range d.messageChan {
+		if d.messageCallback != nil {
+			d.messageCallback(msg[0], msg[1])
 		}
 	}
 }
 
-func (d *Device) SubscribeToMessages() (chan [2]byte, error) {
-	if d == nil {
-		return nil, errors.New("MIDI Device Uninitialized")
+func New(searchName string) *Device {
+	log.Trace("Enter New")
+	defer log.Trace("Exit New")
+
+	if searchName == "" {
+		log.Error("missing MIDI device name")
+		return nil
 	}
-	c := make(chan [2]byte, 1)
-	d.Lock()
-	defer d.Unlock()
-	d.subscribers = append(d.subscribers, c)
-	return c, nil
+
+	log.Debugf("looking for MIDI device name containing %s", searchName)
+
+	drv, err := driver.New()
+	if err != nil {
+		log.Errorf("unable to open midi driver: %s", err)
+		return nil
+	}
+
+	midiInputs, err := drv.Ins()
+	if err != nil {
+		log.Errorf("unable to open midi inputs: %s", err)
+		return nil
+	}
+
+	for _, in := range midiInputs {
+		log.Tracef("found device %s", in.String())
+		if strings.Contains(strings.ToLower(in.String()), strings.ToLower(searchName)) {
+			log.Infof("using MIDI device %s", in.String())
+			d := &Device{
+				DeviceName:  in.String(),
+				driver:      drv,
+				device:      in,
+				messageChan: make(chan [2]int, 250),
+			}
+			go d.handleMessageLoop()
+			return d
+		}
+	}
+
+	log.Errorf("unable to find MIDI input device containing %s", searchName)
+	drv.Close()
+	return nil
 }
