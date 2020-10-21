@@ -51,9 +51,9 @@ func (d *Device) SetMessageCallback(cb func(int, int)) {
 	d.messageCallback = cb
 }
 
-func (d *Device) handleMessageLoop() {
-	log.Trace("Enter handleMessageLoop")
-	defer log.Trace("Exit handleMessageLoop")
+func (d *Device) handleMIDIMessageLoop() {
+	log.Trace("Enter handleMIDIMessageLoop")
+	defer log.Trace("Exit handleMIDIMessageLoop")
 
 	if err := d.device.Open(); err != nil {
 		log.Error(err)
@@ -107,7 +107,7 @@ func New(searchName string) *Device {
 				device:      in,
 				messageChan: make(chan [2]int, 250),
 			}
-			go d.handleMessageLoop()
+			go d.handleMIDIMessageLoop()
 			return d
 		}
 	}

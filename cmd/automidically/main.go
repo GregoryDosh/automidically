@@ -2,13 +2,11 @@ package main
 
 import (
 	"os"
-	"os/signal"
 	"runtime"
 	"runtime/pprof"
-	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
-	"github.com/GregoryDosh/automidically/internal/icon"
+	tray "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/GregoryDosh/automidically/internal/toaster"
 	"github.com/getlantern/systray"
 	"github.com/orandin/lumberjackrus"
@@ -19,10 +17,10 @@ import (
 var (
 	buildVersion          = "0.2.0"
 	defaultLogFilename    = ""
+	configFilename        = ""
 	profileCPUFilename    string
 	profileMemoryFilename string
 	log                   = logrus.WithField("module", "main")
-	sLog                  = log.WithField("function", "systrayStart")
 )
 
 func main() {
@@ -38,11 +36,12 @@ func main() {
 		Action:  automidicallyMain,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				EnvVars: []string{"CONFIG_FILENAME"},
-				Name:    "config",
-				Aliases: []string{"c", "f", "config_filename", "filename"},
-				Usage:   "specify the yml configuration location",
-				Value:   "config.yml",
+				EnvVars:     []string{"CONFIG_FILENAME"},
+				Name:        "config",
+				Aliases:     []string{"c", "f", "config_filename", "filename"},
+				Usage:       "specify the yml configuration location",
+				Destination: &configFilename,
+				Value:       "config.yml",
 			},
 			&cli.StringFlag{
 				EnvVars: []string{"LOG_LEVEL"},
@@ -138,9 +137,8 @@ func automidicallyMain(ctx *cli.Context) error {
 		"documentation": "https://github.com/GregoryDosh/automidically",
 	}).Info()
 
-	configurator.New(ctx.String("config"))
-
-	systray.Run(systrayStart, systrayStop)
+	c := configurator.New(configFilename)
+	systray.Run(tray.Start(c.HandleSystrayMessage), tray.Stop())
 	log.Info("Exiting...")
 
 	if profileMemoryFilename != "" {
@@ -157,48 +155,4 @@ func automidicallyMain(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func systrayStart() {
-	sLog.Trace("Enter systrayStart")
-	defer sLog.Trace("Exit systrayStart")
-
-	systray.SetIcon(icon.Main)
-	systray.SetTitle("AutoMIDIcally")
-	systray.SetTooltip("AutoMIDIcally")
-
-	mReload := systray.AddMenuItem("Reload", "Manual Reload")
-	mReloadConfig := mReload.AddSubMenuItem("Config", "Manual reload config.yml")
-	mReloadDevices := mReload.AddSubMenuItem("Devices", "Manual reload hardware devices")
-	mReloadSessions := mReload.AddSubMenuItem("Sessions", "Manual reload audio sessions")
-
-	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Quit", "Quit AutoMIDIcally")
-
-	sigintc := make(chan os.Signal, 1)
-	signal.Notify(sigintc, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		defer systray.Quit()
-		defer log.Debug("quitting systray")
-		for {
-			select {
-			case <-mReloadConfig.ClickedCh:
-				sLog.Debug("reload config clicked")
-			case <-mReloadDevices.ClickedCh:
-				sLog.Debug("reload devices clicked")
-			case <-mReloadSessions.ClickedCh:
-				sLog.Debug("reload sessions clicked")
-			case <-sigintc:
-				return
-			case <-mQuit.ClickedCh:
-				return
-			}
-		}
-	}()
-}
-
-func systrayStop() {
-	sLog.Trace("Enter systrayStop")
-	defer sLog.Trace("Exit systrayStop")
 }

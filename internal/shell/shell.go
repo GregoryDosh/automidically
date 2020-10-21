@@ -1,6 +1,7 @@
 package shell
 
 import (
+	sysmsg "github.com/GregoryDosh/automidically/internal/systray/message"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,10 +46,13 @@ func (m *Mapping) Initialize() {
 	defer log.Trace("Exit Initialize")
 }
 
-func (m *Mapping) HandleMessage(c int, v int) {
+func (m *Mapping) HandleMIDIMessage(c int, v int) {
 	if m.Cc != c {
 		return
 	}
 
 	log.Infof("Shell Actions Not Implemented: %s", m.Command)
+}
+
+func HandleSystrayMessage(msg sysmsg.Message) {
 }

@@ -70,7 +70,7 @@ func (m *Mapping) Cleanup() {
 	defer mpLog.Trace("Exit Cleanup")
 }
 
-func (m *Mapping) HandleMessage(c int, v int) {
+func (m *Mapping) HandleMIDIMessage(c int, v int) {
 	if m.Cc != c {
 		return
 	}

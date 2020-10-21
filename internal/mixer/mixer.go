@@ -7,6 +7,7 @@ import (
 	"time"
 	"unsafe"
 
+	sysmsg "github.com/GregoryDosh/automidically/internal/systray/message"
 	"github.com/bep/debounce"
 	ole "github.com/go-ole/go-ole"
 	"github.com/mitchellh/go-ps"
@@ -302,5 +303,14 @@ func changeSessionVolume(filename string, volume float32) {
 				das.refreshSessions <- false
 			}
 		}
+	}
+}
+
+func HandleSystrayMessage(msg sysmsg.Message) {
+	switch msg {
+	case sysmsg.SystrayRefreshDevices:
+		das.refreshDevices <- true
+	case sysmsg.SystrayRefreshSessions:
+		das.refreshDevices <- true
 	}
 }
