@@ -51,7 +51,7 @@ func InitializeEnvironment() {
 			os.Exit(1)
 
 		} else {
-			mxLog.Fatalf("This is some error, huh?? %s", err)
+			mxLog.Fatal(err)
 			os.Exit(1)
 		}
 	}
@@ -80,7 +80,7 @@ func InitializeEnvironment() {
 	// 	OnDeviceStateChanged:   debouncedDeviceStateChanged,
 	// 	OnDefaultDeviceChanged: debouncedDefaultDeviceChanged,
 	// })); err != nil {
-	// 	mxLog.Errorf("This is some error, huh? %s", err)
+	// 	mxLog.Error(err)
 	// 	os.Exit(1)
 	// }
 

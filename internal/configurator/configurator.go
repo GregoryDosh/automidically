@@ -41,7 +41,7 @@ func (c *Configurator) updateConfigFromDiskLoop() {
 	// Filewatch to reload config when the source on the disk changes.
 	fileWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatalf("%s....", err)
+		log.Fatal(err)
 	}
 	defer fileWatcher.Close()
 	if err := fileWatcher.Add(c.filename); err != nil {
@@ -62,7 +62,7 @@ func (c *Configurator) updateConfigFromDiskLoop() {
 			}
 		case err, ok := <-fileWatcher.Errors:
 			if !ok {
-				log.Errorf("harumph %s ", err)
+				log.Error(err)
 				return
 			}
 		}
@@ -76,7 +76,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 
 	f, err := ioutil.ReadFile(c.filename)
 	if err != nil {
-		log.Errorf("asdf? %s", err)
+		log.Error(err)
 		return
 	}
 

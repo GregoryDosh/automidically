@@ -74,7 +74,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatalf("%s here", err)
+		log.Fatal(err)
 	}
 }
 
@@ -112,7 +112,7 @@ func automidicallyMain(ctx *cli.Context) error {
 		}
 		hook, err := lumberjackrus.NewHook(opts, ll, &logrus.JSONFormatter{}, nil)
 		if err != nil {
-			log.Fatalf("lumber %s", err)
+			log.Fatal(err)
 		}
 		logrus.AddHook(hook)
 	}
