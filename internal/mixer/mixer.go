@@ -39,6 +39,9 @@ type devicesAndSessions struct {
 }
 
 func InitializeEnvironment() {
+	mxLog.Trace("Enter InitializeEnvironment")
+	defer mxLog.Trace("Exit InitializeEnvironment")
+
 	// CoInitializeEx must be called at least once, and is usually called only once, for each thread that uses the COM library.
 	// https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex
 	if err := ole.CoInitializeEx(0, ole.COINIT_MULTITHREADED); err != nil {
@@ -47,7 +50,7 @@ func InitializeEnvironment() {
 			os.Exit(1)
 
 		} else {
-			mxLog.Fatal(err)
+			mxLog.Fatalf("This is some error, huh?? %s", err)
 			os.Exit(1)
 		}
 	}
@@ -60,25 +63,25 @@ func InitializeEnvironment() {
 	}
 
 	// Create a debounced notification callback for when default devices are change
-	var debouncedDeviceStateChanged = func(pwstrDeviceId string, dwNewState uint64) error {
-		mxLog.Trace("detected changed default devices")
-		das.refreshDevices <- true
-		return nil
-	}
+	// var debouncedDeviceStateChanged = func(pwstrDeviceId string, dwNewState uint64) error {
+	// 	mxLog.Trace("detected changed default devices")
+	// 	das.refreshDevices <- true
+	// 	return nil
+	// }
 
-	var debouncedDefaultDeviceChanged = func(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
-		mxLog.Trace("detected changed default devices")
-		das.refreshDevices <- true
-		return nil
-	}
+	// var debouncedDefaultDeviceChanged = func(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
+	// 	mxLog.Trace("detected changed default devices")
+	// 	das.refreshDevices <- true
+	// 	return nil
+	// }
 
-	if err := das.immDeviceEnumerator.RegisterEndpointNotificationCallback(wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
-		OnDeviceStateChanged:   debouncedDeviceStateChanged,
-		OnDefaultDeviceChanged: debouncedDefaultDeviceChanged,
-	})); err != nil {
-		mxLog.Error(err)
-		os.Exit(1)
-	}
+	// if err := das.immDeviceEnumerator.RegisterEndpointNotificationCallback(wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
+	// 	OnDeviceStateChanged:   debouncedDeviceStateChanged,
+	// 	OnDefaultDeviceChanged: debouncedDefaultDeviceChanged,
+	// })); err != nil {
+	// 	mxLog.Errorf("This is some error, huh? %s", err)
+	// 	os.Exit(1)
+	// }
 
 	go audioEventLoop()
 	das.refreshDevices <- true

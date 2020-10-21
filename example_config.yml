@@ -6,23 +6,33 @@ mapping:
       reverse: true
       min: 0
       max: 64
+
     - cc: 1
-      filename: chrome.exe
+      filename:
+        - chrome.exe
+        - firefox.exe
+
     - cc: 2
       filename: mstsc.exe
+
     - cc: 3
       special: output
+
     - cc: 4
       special: system
+
     - cc: 5
       device: Headphones
+
     - cc: 6
       filename: discord.exe
+
     - cc: 7
       filename: YouTube Music Desktop App.exe
   shell:
     - cc: 39
       command: ls
+
     - cc: 55
       command: dir
 

@@ -10,6 +10,8 @@ type Device struct {
 }
 
 func (d *Device) DeviceName() (string, bool) {
+	mxdLog.Trace("Enter DeviceName")
+	defer mxdLog.Trace("Exit DeviceName")
 	if d.mmd == nil {
 		return "", false
 	}

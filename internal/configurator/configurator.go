@@ -57,7 +57,7 @@ func (c *Configurator) updateConfigFromDiskLoop() {
 	// Filewatch to reload config when the source on the disk changes.
 	fileWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("%s....", err)
 	}
 	defer fileWatcher.Close()
 	if err := fileWatcher.Add(c.filename); err != nil {
@@ -78,7 +78,7 @@ func (c *Configurator) updateConfigFromDiskLoop() {
 			}
 		case err, ok := <-fileWatcher.Errors:
 			if !ok {
-				log.Error(err)
+				log.Errorf("harumph %s ", err)
 				return
 			}
 		}
@@ -92,7 +92,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 
 	f, err := ioutil.ReadFile(c.filename)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("asdf? %s", err)
 		return
 	}
 
@@ -128,10 +128,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 		m.Cleanup()
 	}
 	c.Mapping.Mixer = nil
-	for _, m := range newMapping.Mapping.Mixer {
-		m.Initialize()
-		c.Mapping.Mixer = append(c.Mapping.Mixer, m)
-	}
+	c.Mapping.Mixer = newMapping.Mapping.Mixer
 
 	// Shell
 	for _, m := range c.Mapping.Shell {
