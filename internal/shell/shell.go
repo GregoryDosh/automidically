@@ -1,7 +1,7 @@
 package shell
 
 import (
-	sysmsg "github.com/GregoryDosh/automidically/internal/systray/message"
+	sysmsg "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/sirupsen/logrus"
 )
 

@@ -21,7 +21,7 @@ type Device struct {
 	sync.Mutex
 }
 
-func (d *Device) Cleanup() {
+func (d *Device) Cleanup() error {
 	log.Trace("Enter Cleanup")
 	defer log.Trace("Exit Cleanup")
 
@@ -41,6 +41,7 @@ func (d *Device) Cleanup() {
 	if d.messageCallback != nil {
 		d.messageCallback = nil
 	}
+	return nil
 }
 
 func (d *Device) SetMessageCallback(cb func(int, int)) {

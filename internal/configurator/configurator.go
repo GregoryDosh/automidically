@@ -6,10 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GregoryDosh/automidically/internal/coreaudio"
 	"github.com/GregoryDosh/automidically/internal/midi"
 	"github.com/GregoryDosh/automidically/internal/mixer"
 	"github.com/GregoryDosh/automidically/internal/shell"
-	sysmsg "github.com/GregoryDosh/automidically/internal/systray/message"
+	"github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/bep/debounce"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
@@ -28,6 +29,7 @@ type Configurator struct {
 	Mapping        MappingOptions `yaml:"mapping,omitempty"`
 	MIDIDevice     *midi.Device
 	MIDIDeviceName string `yaml:"midi_devicename"`
+	coreAudio      *coreaudio.CoreAudio
 	reloadConfig   chan bool
 	sync.Mutex
 }
@@ -101,17 +103,15 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 	if !strings.EqualFold(newMapping.MIDIDeviceName, c.MIDIDeviceName) {
 		log.Trace("MIDI device name changed")
 		if c.MIDIDevice != nil {
-			c.MIDIDevice.Cleanup()
+			if err := c.MIDIDevice.Cleanup(); err != nil {
+				log.Error(err)
+			}
 		}
 		c.MIDIDeviceName = newMapping.MIDIDeviceName
 		c.MIDIDevice = midi.New(c.MIDIDeviceName)
 	}
 
 	// Mixer
-	for _, m := range c.Mapping.Mixer {
-		m.Cleanup()
-	}
-	c.Mapping.Mixer = nil
 	c.Mapping.Mixer = newMapping.Mapping.Mixer
 
 	// Shell
@@ -128,8 +128,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 		c.MIDIDevice.SetMessageCallback(c.midiMessageCallback)
 	}
 
-	log.Debugf("completed configuration reload")
-	log.Debugf("%+v", c.Mapping)
+	log.Debugf("completed configuration reload: %+v", c.Mapping)
 
 }
 
@@ -138,7 +137,7 @@ func (c *Configurator) midiMessageCallback(cc int, v int) {
 		c.Lock()
 		defer c.Unlock()
 		for _, m := range c.Mapping.Mixer {
-			m.HandleMIDIMessage(cc, v)
+			c.coreAudio.HandleMIDIMessage(&m, cc, v)
 		}
 	}()
 	go func() {
@@ -150,15 +149,29 @@ func (c *Configurator) midiMessageCallback(cc int, v int) {
 	}()
 }
 
-func (c *Configurator) HandleSystrayMessage(msg sysmsg.Message) {
-	if msg == sysmsg.SystrayRefreshConfig {
+func (c *Configurator) HandleSystrayMessage(msg systray.Message) {
+	if msg == systray.SystrayRefreshConfig {
 		c.reloadConfig <- true
 		return
 	}
+	if msg == systray.SystrayQuit {
+		log.Trace("Starting cleanup & shutdown procedures.")
+		if err := c.MIDIDevice.Cleanup(); err != nil {
+			log.Error(err)
+		}
+		if err := c.coreAudio.Cleanup(); err != nil {
+			log.Error(err)
+		}
+		return
+	}
 	go func() {
-		mixer.HandleSystrayMessage(msg)
+		c.Lock()
+		defer c.Unlock()
+		c.coreAudio.HandleSystrayMessage(msg)
 	}()
 	go func() {
+		c.Lock()
+		defer c.Unlock()
 		shell.HandleSystrayMessage(msg)
 	}()
 }
@@ -166,13 +179,17 @@ func (c *Configurator) HandleSystrayMessage(msg sysmsg.Message) {
 func New(filename string) *Configurator {
 	log.Trace("Enter New")
 	defer log.Trace("Exit New")
+
+	ca, err := coreaudio.New()
+	if err != nil {
+		log.Error(err)
+	}
+
 	c := &Configurator{
 		filename:     filename,
 		reloadConfig: make(chan bool, 1),
+		coreAudio:    ca,
 	}
-
-	// This should only be called one time to prep the Windows COM bindings.
-	mixer.InitializeEnvironment()
 
 	go c.updateConfigFromDiskLoop()
 	c.reloadConfig <- true

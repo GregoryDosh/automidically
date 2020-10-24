@@ -6,7 +6,6 @@ import (
 	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/icon"
-	"github.com/GregoryDosh/automidically/internal/systray/message"
 	"github.com/getlantern/systray"
 	"github.com/sirupsen/logrus"
 )
@@ -15,7 +14,7 @@ var (
 	log = logrus.WithField("function", "systray")
 )
 
-func Start(messageHandler func(message.Message)) func() {
+func Start(messageHandler func(Message)) func() {
 
 	return func() {
 		log.Trace("Enter systrayStart")
@@ -42,14 +41,16 @@ func Start(messageHandler func(message.Message)) func() {
 			for {
 				select {
 				case <-mReloadConfig.ClickedCh:
-					messageHandler(message.SystrayRefreshConfig)
+					messageHandler(SystrayRefreshConfig)
 				case <-mReloadDevices.ClickedCh:
-					messageHandler(message.SystrayRefreshDevices)
+					messageHandler(SystrayRefreshDevices)
 				case <-mReloadSessions.ClickedCh:
-					messageHandler(message.SystrayRefreshSessions)
+					messageHandler(SystrayRefreshSessions)
 				case <-sigintc:
+					messageHandler(SystrayQuit)
 					return
 				case <-mQuit.ClickedCh:
+					messageHandler(SystrayQuit)
 					return
 				}
 			}
