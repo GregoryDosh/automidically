@@ -26,6 +26,7 @@ var (
 type CoreAudio struct {
 	inputDevice                   *device.Device
 	outputDevice                  *device.Device
+	allDevices                    []*device.Device
 	refreshHardwareDevicesChannel chan bool
 	refreshAudioSessionsChannel   chan bool
 	deviceLock                    sync.Mutex
@@ -55,6 +56,12 @@ func (ca *CoreAudio) cleanupDevices() {
 		}
 		ca.inputDevice = nil
 	}
+	for _, d := range ca.allDevices {
+		if err := d.Cleanup(); err != nil {
+			log.Error(err)
+		}
+	}
+	ca.allDevices = nil
 }
 
 // coreAudioEventLoop is reponsible for the coordination of the logic in the coreaudio package. It will handle events
@@ -157,6 +164,32 @@ func (ca *CoreAudio) refreshHardwareDevices() {
 
 	// Since the default devices change, refresh their audio sessions too.
 	ca.refreshAudioSessionsChannel <- true
+
+	// Enumerate all audio devices
+	var deviceCollection *wca.IMMDeviceCollection
+	if err := ca.deviceEnumerator.EnumAudioEndpoints(wca.ERender, wca.DEVICE_STATE_ACTIVE, &deviceCollection); err != nil {
+		log.Error(err)
+	}
+
+	var deviceCount uint32
+	if err := deviceCollection.GetCount(&deviceCount); err != nil {
+		log.Error(err)
+	}
+
+	for i := uint32(0); i < deviceCount; i++ {
+		var mmd *wca.IMMDevice
+		if err := deviceCollection.Item(i, &mmd); err != nil {
+			log.Error(err)
+			continue
+		}
+		d, err := device.New(mmd)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+		ca.allDevices = append(ca.allDevices, d)
+	}
+
 }
 
 func (ca *CoreAudio) onDefaultDeviceChanged(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
@@ -261,8 +294,14 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 	}
 
 	// device
-	for _, d := range m.Device {
-		log.Debugf("Device Control Not Implemented: %s", d)
+	for _, dn := range m.Device {
+		for _, d := range ca.allDevices {
+			if name, _ := d.DeviceName(); strings.EqualFold(name, dn) {
+				if err := d.SetVolumeLevel(newValue); err != nil {
+					log.Error(err)
+				}
+			}
+		}
 	}
 }
 
