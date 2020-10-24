@@ -2,13 +2,12 @@ package main
 
 import (
 	"os"
-	"os/signal"
 	"runtime"
 	"runtime/pprof"
-	"syscall"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
-	"github.com/GregoryDosh/automidically/internal/icon"
+	tray "github.com/GregoryDosh/automidically/internal/systray"
+	"github.com/GregoryDosh/automidically/internal/toaster"
 	"github.com/getlantern/systray"
 	"github.com/orandin/lumberjackrus"
 	"github.com/sirupsen/logrus"
@@ -16,12 +15,16 @@ import (
 )
 
 var (
+	buildVersion          = "0.2.0"
+	defaultLogFilename    = ""
+	configFilename        = ""
 	profileCPUFilename    string
 	profileMemoryFilename string
 	log                   = logrus.WithField("module", "main")
 )
 
 func main() {
+
 	app := &cli.App{
 		Name:     "automidically",
 		HelpName: "automidically",
@@ -29,15 +32,16 @@ func main() {
 		Authors: []*cli.Author{
 			{Name: "Gregory Dosh", Email: "GregoryDosh@users.noreply.github.com"},
 		},
-		Version: "0.2.0",
+		Version: buildVersion,
 		Action:  automidicallyMain,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				EnvVars: []string{"CONFIG_FILENAME"},
-				Name:    "config",
-				Aliases: []string{"c", "f", "config_filename", "filename"},
-				Usage:   "specify the yml configuration location",
-				Value:   "config.yml",
+				EnvVars:     []string{"CONFIG_FILENAME"},
+				Name:        "config",
+				Aliases:     []string{"c", "f", "config_filename", "filename"},
+				Usage:       "specify the yml configuration location",
+				Destination: &configFilename,
+				Value:       "config.yml",
 			},
 			&cli.StringFlag{
 				EnvVars: []string{"LOG_LEVEL"},
@@ -50,7 +54,14 @@ func main() {
 				EnvVars: []string{"LOG_PATH"},
 				Name:    "log_path",
 				Usage:   "Set a path for the log file. Set empty to disable.",
-				Value:   "automidically.log",
+				Value:   defaultLogFilename,
+			},
+			&cli.BoolFlag{
+				EnvVars: []string{"NOTIFICATIONS"},
+				Aliases: []string{"n"},
+				Name:    "notifications",
+				Usage:   "Enables Windows 10 Notifications",
+				Value:   false,
 			},
 			&cli.StringFlag{
 				EnvVars:     []string{"PROFILE_CPU"},
@@ -96,6 +107,11 @@ func automidicallyMain(ctx *cli.Context) error {
 	}
 	logrus.SetLevel(ll)
 
+	if ctx.Bool("notifications") {
+		toast := toaster.New(logrus.WarnLevel, &logrus.JSONFormatter{})
+		logrus.AddHook(toast)
+	}
+
 	log_path := ctx.String("log_path")
 	if log_path != "" {
 		opts := &lumberjackrus.LogFile{
@@ -103,9 +119,9 @@ func automidicallyMain(ctx *cli.Context) error {
 			MaxSize:    10,
 			MaxBackups: 2,
 		}
-		hook, err := lumberjackrus.NewHook(opts, ll, &logrus.TextFormatter{}, nil)
+		hook, err := lumberjackrus.NewHook(opts, ll, &logrus.JSONFormatter{}, nil)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		logrus.AddHook(hook)
 	}
@@ -130,9 +146,8 @@ func automidicallyMain(ctx *cli.Context) error {
 		"documentation": "https://github.com/GregoryDosh/automidically",
 	}).Info()
 
-	configurator.New(ctx.String("config"))
-
-	systray.Run(systrayStart, systrayStop)
+	c := configurator.New(configFilename)
+	systray.Run(tray.Start(c.HandleSystrayMessage), tray.Stop())
 	log.Info("Exiting...")
 
 	if profileMemoryFilename != "" {
@@ -149,44 +164,4 @@ func automidicallyMain(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func systrayStart() {
-	log := log.WithField("function", "systrayStart")
-
-	systray.SetIcon(icon.Main)
-	systray.SetTitle("AutoMIDIcally")
-	systray.SetTooltip("AutoMIDIcally")
-
-	mReloadConfig := systray.AddMenuItem("Reload Config", "Manual reload config.yml")
-	mReloadDevices := systray.AddMenuItem("Reload Devices", "Manual reload hardware devices")
-	mReloadSessions := systray.AddMenuItem("Reload Sessions", "Manual reload audio sessions")
-
-	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Quit", "Quit AutoMIDIcally")
-
-	sigintc := make(chan os.Signal, 1)
-	signal.Notify(sigintc, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		defer systray.Quit()
-		defer log.Debug("quitting systray")
-		for {
-			select {
-			case <-mReloadConfig.ClickedCh:
-				log.Debug("reload config clicked")
-			case <-mReloadDevices.ClickedCh:
-				log.Debug("reload devices clicked")
-			case <-mReloadSessions.ClickedCh:
-				log.Debug("reload sessions clicked")
-			case <-sigintc:
-				return
-			case <-mQuit.ClickedCh:
-				return
-			}
-		}
-	}()
-}
-
-func systrayStop() {
 }

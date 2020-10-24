@@ -28,7 +28,8 @@ func (a *AudioSession) SetVolume(v float32) bool {
 	}
 
 	if err := a.simpleAudioVolume.SetMasterVolume(v, nil); err != nil {
-		if err.(*ole.OleError).Code() == 0x88890004 { // AUDCLNT_E_DEVICE_INVALIDATED
+		// AUDCLNT_E_DEVICE_INVALIDATED
+		if err.(*ole.OleError).Code() == 0x88890004 {
 			mxaLog.Debugf("audio session %s unavailable", a.ProcessExecutable)
 			return false
 		}

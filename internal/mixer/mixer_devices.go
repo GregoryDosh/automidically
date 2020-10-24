@@ -10,6 +10,8 @@ type Device struct {
 }
 
 func (d *Device) DeviceName() (string, bool) {
+	mxdLog.Trace("Enter DeviceName")
+	defer mxdLog.Trace("Exit DeviceName")
 	if d.mmd == nil {
 		return "", false
 	}
@@ -54,6 +56,7 @@ func (d *Device) SetVolumeLevel(v float32) (float32, bool) {
 func (d *Device) Cleanup() {
 	if d.aev != nil {
 		d.aev.Release()
+		d.aev = nil
 	}
 	if d.mmd != nil {
 		d.mmd.Release()

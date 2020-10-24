@@ -7,6 +7,7 @@ import (
 	"time"
 	"unsafe"
 
+	sysmsg "github.com/GregoryDosh/automidically/internal/systray/message"
 	"github.com/bep/debounce"
 	ole "github.com/go-ole/go-ole"
 	"github.com/mitchellh/go-ps"
@@ -26,24 +27,28 @@ var (
 )
 
 type devicesAndSessions struct {
-	inputDevice         *Device
-	outputDevice        *Device
-	sessions            []*AudioSession
-	activeSession       *AudioSession
-	systemSession       *AudioSession
-	refreshDevices      chan bool
-	refreshSessions     chan bool
-	deviceLock          sync.Mutex
-	sessionLock         sync.Mutex
-	immDeviceEnumerator *wca.IMMDeviceEnumerator
+	inputDevice        *Device
+	outputDevice       *Device
+	sessions           []*AudioSession
+	activeSession      *AudioSession
+	systemSession      *AudioSession
+	refreshDevices     chan bool
+	refreshSessions    chan bool
+	deviceLock         sync.Mutex
+	sessionLock        sync.Mutex
+	deviceEnumerator   *wca.IMMDeviceEnumerator
+	notificationClient *wca.IMMNotificationClient
 }
 
 func InitializeEnvironment() {
+	mxLog.Trace("Enter InitializeEnvironment")
+	defer mxLog.Trace("Exit InitializeEnvironment")
+
 	// CoInitializeEx must be called at least once, and is usually called only once, for each thread that uses the COM library.
 	// https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex
 	if err := ole.CoInitializeEx(0, ole.COINIT_MULTITHREADED); err != nil {
 		if err.(*ole.OleError).Code() == 1 {
-			mxLog.Error("CoInitializeEX returned S_FALSE -> Already initialized on this threa")
+			mxLog.Error("CoInitializeEX returned S_FALSE -> Already initialized on this thread")
 			os.Exit(1)
 
 		} else {
@@ -54,28 +59,53 @@ func InitializeEnvironment() {
 
 	// Enables audio clients to discover audio endpoint devices.
 	// https://docs.microsoft.com/en-us/windows/win32/coreaudio/mmdevice-api
-	if err := wca.CoCreateInstance(wca.CLSID_MMDeviceEnumerator, 0, wca.CLSCTX_ALL, wca.IID_IMMDeviceEnumerator, &das.immDeviceEnumerator); err != nil {
+	if err := wca.CoCreateInstance(wca.CLSID_MMDeviceEnumerator, 0, wca.CLSCTX_ALL, wca.IID_IMMDeviceEnumerator, &das.deviceEnumerator); err != nil {
 		mxLog.Fatalf("CoCreateInstance failed to create MMDeviceEnumerator %s", err)
 		os.Exit(1)
 	}
 
-	// Create a debounced notification callback for when default devices are change
-	var debouncedDeviceStateChanged = func(pwstrDeviceId string, dwNewState uint64) error {
-		mxLog.Trace("detected changed default devices")
+	// When some events happen we need to send a refresh device command, others we ignore
+	var onDefaultDeviceChanged = func(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
+		if flow == wca.ERender {
+			mxLog.Trace("detected onDefaultDeviceChanged event: output")
+		} else if flow == wca.ECapture {
+			mxLog.Trace("detected onDefaultDeviceChanged event: input")
+		} else {
+			mxLog.Trace("detected onDefaultDeviceChanged event: unknown")
+		}
 		das.refreshDevices <- true
 		return nil
 	}
-
-	var debouncedDefaultDeviceChanged = func(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
-		mxLog.Trace("detected changed default devices")
+	var onDeviceAdded = func(pwstrDeviceId string) error {
+		mxLog.Trace("detected onDeviceAdded event")
 		das.refreshDevices <- true
 		return nil
 	}
+	var onDeviceRemoved = func(pwstrDeviceId string) error {
+		mxLog.Trace("detected onDeviceRemoved event")
+		das.refreshDevices <- true
+		return nil
+	}
+	var onDeviceStateChanged = func(pwstrDeviceId string, dwNewState uint64) error {
+		mxLog.Trace("detected onDeviceStateChanged event")
+		das.refreshDevices <- true
+		return nil
+	}
+	// var onPropertyValueChanged = func(pwstrDeviceId string, key uint64) error {
+	// 	// mxLog.Info("detected onPropertyValueChanged event")
+	// 	// das.refreshDevices <- true
+	// 	return nil
+	// }
 
-	if err := das.immDeviceEnumerator.RegisterEndpointNotificationCallback(wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
-		OnDeviceStateChanged:   debouncedDeviceStateChanged,
-		OnDefaultDeviceChanged: debouncedDefaultDeviceChanged,
-	})); err != nil {
+	das.notificationClient = wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
+		OnDefaultDeviceChanged: onDefaultDeviceChanged,
+		OnDeviceAdded:          onDeviceAdded,
+		OnDeviceRemoved:        onDeviceRemoved,
+		OnDeviceStateChanged:   onDeviceStateChanged,
+		// OnPropertyValueChanged: onPropertyValueChanged,
+	})
+
+	if err := das.deviceEnumerator.RegisterEndpointNotificationCallback(das.notificationClient); err != nil {
 		mxLog.Error(err)
 		os.Exit(1)
 	}
@@ -99,14 +129,14 @@ func audioEventLoop() {
 			mxLog.Debug("default audio devices change detected")
 			ddev(refreshHardwareDevices)
 		case <-periodicSessionRefresh.C:
-			mxLog.Debug("periodic audio session refresh triggered")
+			mxLog.Trace("periodic audio session refresh triggered")
 			das.refreshSessions <- false
 		case instantRefresh := <-das.refreshSessions:
 			if instantRefresh {
-				mxLog.Debug("triggering audio session refresh")
+				mxLog.Trace("triggering audio session refresh")
 				dses(refreshAudioSessions)
 			} else {
-				mxLog.Debug("triggering heavily throttled audio session refresh")
+				mxLog.Trace("triggering heavily throttled audio session refresh")
 				dsesLong(refreshAudioSessions)
 			}
 		}
@@ -159,7 +189,7 @@ func refreshHardwareDevices() {
 	das.inputDevice = &Device{}
 
 	// Default Output Device
-	if err := das.immDeviceEnumerator.GetDefaultAudioEndpoint(wca.ERender, wca.EConsole, &das.outputDevice.mmd); err != nil {
+	if err := das.deviceEnumerator.GetDefaultAudioEndpoint(wca.ERender, wca.EConsole, &das.outputDevice.mmd); err != nil {
 		mxLog.Warn("no default output device detected")
 		return
 	}
@@ -174,7 +204,7 @@ func refreshHardwareDevices() {
 	das.refreshSessions <- true
 
 	// Default Input Device
-	if err := das.immDeviceEnumerator.GetDefaultAudioEndpoint(wca.ECapture, wca.EConsole, &das.inputDevice.mmd); err != nil {
+	if err := das.deviceEnumerator.GetDefaultAudioEndpoint(wca.ECapture, wca.EConsole, &das.inputDevice.mmd); err != nil {
 		mxLog.Warn("no default input device detected")
 		return
 	}
@@ -299,5 +329,14 @@ func changeSessionVolume(filename string, volume float32) {
 				das.refreshSessions <- false
 			}
 		}
+	}
+}
+
+func HandleSystrayMessage(msg sysmsg.Message) {
+	switch msg {
+	case sysmsg.SystrayRefreshDevices:
+		das.refreshDevices <- true
+	case sysmsg.SystrayRefreshSessions:
+		das.refreshDevices <- true
 	}
 }

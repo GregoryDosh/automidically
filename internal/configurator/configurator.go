@@ -9,6 +9,7 @@ import (
 	"github.com/GregoryDosh/automidically/internal/midi"
 	"github.com/GregoryDosh/automidically/internal/mixer"
 	"github.com/GregoryDosh/automidically/internal/shell"
+	sysmsg "github.com/GregoryDosh/automidically/internal/systray/message"
 	"github.com/bep/debounce"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
@@ -16,23 +17,6 @@ import (
 )
 
 var log = logrus.WithField("module", "configurator")
-
-func New(filename string) *Configurator {
-	log.Trace("Enter New")
-	defer log.Trace("Exit New")
-	c := &Configurator{
-		filename:      filename,
-		refreshConfig: make(chan bool, 1),
-	}
-
-	// This should only be called one time to prep the Windows COM bindings.
-	mixer.InitializeEnvironment()
-
-	go c.updateConfigFromDiskLoop()
-	c.refreshConfig <- true
-
-	return c
-}
 
 type MappingOptions struct {
 	Mixer []mixer.Mapping `yaml:"mixer,omitempty"`
@@ -44,7 +28,7 @@ type Configurator struct {
 	Mapping        MappingOptions `yaml:"mapping,omitempty"`
 	MIDIDevice     *midi.Device
 	MIDIDeviceName string `yaml:"midi_devicename"`
-	refreshConfig  chan bool
+	reloadConfig   chan bool
 	sync.Mutex
 }
 
@@ -67,14 +51,14 @@ func (c *Configurator) updateConfigFromDiskLoop() {
 	// Filewatcher events, and manual refresh loop
 	for {
 		select {
-		case <-c.refreshConfig:
+		case <-c.reloadConfig:
 			d(c.readConfigFromDiskAndInit)
 		case event, ok := <-fileWatcher.Events:
 			if !ok {
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				c.refreshConfig <- true
+				c.reloadConfig <- true
 			}
 		case err, ok := <-fileWatcher.Errors:
 			if !ok {
@@ -128,10 +112,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 		m.Cleanup()
 	}
 	c.Mapping.Mixer = nil
-	for _, m := range newMapping.Mapping.Mixer {
-		m.Initialize()
-		c.Mapping.Mixer = append(c.Mapping.Mixer, m)
-	}
+	c.Mapping.Mixer = newMapping.Mapping.Mixer
 
 	// Shell
 	for _, m := range c.Mapping.Shell {
@@ -157,14 +138,44 @@ func (c *Configurator) midiMessageCallback(cc int, v int) {
 		c.Lock()
 		defer c.Unlock()
 		for _, m := range c.Mapping.Mixer {
-			m.HandleMessage(cc, v)
+			m.HandleMIDIMessage(cc, v)
 		}
 	}()
 	go func() {
 		c.Lock()
 		defer c.Unlock()
 		for _, m := range c.Mapping.Shell {
-			m.HandleMessage(cc, v)
+			m.HandleMIDIMessage(cc, v)
 		}
 	}()
+}
+
+func (c *Configurator) HandleSystrayMessage(msg sysmsg.Message) {
+	if msg == sysmsg.SystrayRefreshConfig {
+		c.reloadConfig <- true
+		return
+	}
+	go func() {
+		mixer.HandleSystrayMessage(msg)
+	}()
+	go func() {
+		shell.HandleSystrayMessage(msg)
+	}()
+}
+
+func New(filename string) *Configurator {
+	log.Trace("Enter New")
+	defer log.Trace("Exit New")
+	c := &Configurator{
+		filename:     filename,
+		reloadConfig: make(chan bool, 1),
+	}
+
+	// This should only be called one time to prep the Windows COM bindings.
+	mixer.InitializeEnvironment()
+
+	go c.updateConfigFromDiskLoop()
+	c.reloadConfig <- true
+
+	return c
 }
