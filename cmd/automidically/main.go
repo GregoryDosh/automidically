@@ -56,6 +56,13 @@ func main() {
 				Usage:   "Set a path for the log file. Set empty to disable.",
 				Value:   defaultLogFilename,
 			},
+			&cli.BoolFlag{
+				EnvVars: []string{"NOTIFICATIONS"},
+				Aliases: []string{"n"},
+				Name:    "notifications",
+				Usage:   "Enables Windows 10 Notifications",
+				Value:   false,
+			},
 			&cli.StringFlag{
 				EnvVars:     []string{"PROFILE_CPU"},
 				Name:        "profile_cpu",
@@ -100,8 +107,10 @@ func automidicallyMain(ctx *cli.Context) error {
 	}
 	logrus.SetLevel(ll)
 
-	toast := toaster.New(logrus.WarnLevel, &logrus.JSONFormatter{})
-	logrus.AddHook(toast)
+	if ctx.Bool("notifications") {
+		toast := toaster.New(logrus.WarnLevel, &logrus.JSONFormatter{})
+		logrus.AddHook(toast)
+	}
 
 	log_path := ctx.String("log_path")
 	if log_path != "" {
