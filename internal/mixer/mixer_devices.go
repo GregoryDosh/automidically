@@ -56,6 +56,7 @@ func (d *Device) SetVolumeLevel(v float32) (float32, bool) {
 func (d *Device) Cleanup() {
 	if d.aev != nil {
 		d.aev.Release()
+		d.aev = nil
 	}
 	if d.mmd != nil {
 		d.mmd.Release()
