@@ -1,6 +1,6 @@
 # AutoMIDIcally
 
-![nanoKONTROL2](/assets/nanoKONTROL2%20Example.png "Shiprock, New Mexico by Beau Rogers")
+![nanoKONTROL2](/assets/nanoKONTROL2%20Example.png "Example of a nanoKONTROL2 with faders labeled with icons.")
 
 AutoMIDIcally gives Windows users an ability to map buttons, faders, etc. on a MIDI device to actions within windows. The major feature is being able to control the volumes for applications independently by mapping real faders to the same applications you'd see in the Volume Mixer within Windows. There is also some small integrations with shell actions based on button inputs, so if you can control it from the command line you should be able to control it through your MIDI device.
 
