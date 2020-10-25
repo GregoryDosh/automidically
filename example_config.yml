@@ -118,6 +118,34 @@ mapping:
     - cc: 39
       command: ls
 
+    # This emulates a previous media track button.
+    - cc: 43
+      usePowershell: true
+      command: |
+        $wshShell = new-object -com wscript.shell
+        $wshShell.SendKeys([char]177)
+
+    # This emulates a next media track button.
+    - cc: 44
+      usePowershell: true
+      command: |
+        $wshShell = new-object -com wscript.shell
+        $wshShell.SendKeys([char]176)
+
+    # This emulates a stop media track button.
+    - cc: 42
+      usePowershell: true
+      command: |
+        $wshShell = new-object -com wscript.shell
+        $wshShell.SendKeys([char]178)
+
+    # This emulates a play/pause media track button.
+    - cc: 41
+      usePowershell: true
+      command: |
+        $wshShell = new-object -com wscript.shell
+        $wshShell.SendKeys([char]179)
+
     # This example will call powershell and pop-up a notification near the system tray.
     - cc: 55
       usePowershell: true
@@ -132,3 +160,6 @@ mapping:
         $balmsg.BalloonTipText = "Message received on {{ .CC }}!"
         $balmsg.Visible = $true
         $balmsg.ShowBalloonTip(2000)
+
+# For debugging/testing purposes you can turn this to true and the log file will contain all of the MIDI events captured.
+echoMIDIEvents: false

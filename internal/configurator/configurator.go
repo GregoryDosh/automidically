@@ -26,6 +26,7 @@ type MappingOptions struct {
 
 type Configurator struct {
 	filename       string
+	EchoMIDIEvents bool           `yaml:"echoMIDIEvents"`
 	Mapping        MappingOptions `yaml:"mapping,omitempty"`
 	MIDIDevice     *midi.Device
 	MIDIDeviceName string `yaml:"midiDevicename"`
@@ -88,6 +89,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 	newMapping := struct {
 		Mapping        MappingOptions `yaml:"mapping"`
 		MIDIDeviceName string         `yaml:"midiDevicename"`
+		EchoMIDIEvents bool           `yaml:"echoMIDIEvents"`
 	}{}
 	if err := yaml.Unmarshal(f, &newMapping); err != nil {
 		log.Errorf("unable to parse new config: %s", err)
@@ -127,6 +129,9 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 		c.MIDIDevice.SetMessageCallback(c.midiMessageCallback)
 	}
 
+	// EchoMIDIEvents
+	c.EchoMIDIEvents = newMapping.EchoMIDIEvents
+
 	log.Debug("completed configuration reload")
 	log.Tracef("%+v", c.Mapping)
 }
@@ -134,6 +139,9 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 func (c *Configurator) midiMessageCallback(cc int, v int) {
 	c.Lock()
 	defer c.Unlock()
+	if c.EchoMIDIEvents {
+		log.Infof("CC: %d, Value: %d", cc, v)
+	}
 	for _, m := range c.Mapping.Mixer {
 		go func(m mixer.Mapping) {
 			c.coreAudio.HandleMIDIMessage(&m, cc, v)
