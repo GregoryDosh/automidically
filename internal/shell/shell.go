@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"os/exec"
+
 	sysmsg "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/sirupsen/logrus"
 )
@@ -8,8 +10,11 @@ import (
 var log = logrus.WithField("module", "shell")
 
 type Mapping struct {
-	Cc      int      `yaml:"cc"`
-	Command []string `yaml:"-"`
+	Cc             int      `yaml:"cc"`
+	Command        []string `yaml:"-"`
+	LogOutput      bool     `yaml:"log_output"`
+	SuppressErrors bool     `yaml:"suppress_errors"`
+	UsePowershell  bool     `yaml:"use_powershell"`
 }
 
 func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -36,22 +41,29 @@ func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (m *Mapping) Cleanup() {
-	log.Trace("Enter Cleanup")
-	defer log.Trace("Exit Cleanup")
-}
-
-func (m *Mapping) Initialize() {
-	log.Trace("Enter Initialize")
-	defer log.Trace("Exit Initialize")
-}
-
 func (m *Mapping) HandleMIDIMessage(c int, v int) {
 	if m.Cc != c {
 		return
 	}
 
-	log.Infof("Shell Actions Not Implemented: %s", m.Command)
+	exe := "cmd.exe"
+	args := []string{"/C"}
+	if m.UsePowershell {
+		exe = "powershell.exe"
+		args = []string{"-NoProfile", "-NonInteractive"}
+	}
+
+	args = append(args, m.Command...)
+
+	cmd := exec.Command(exe, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil && !m.SuppressErrors {
+		log.Errorf("%s returned error %s", m.Command, err)
+		return
+	}
+	if m.LogOutput && len(output) > 0 {
+		log.Infof("%s returned %s", m.Command, output)
+	}
 }
 
 func HandleSystrayMessage(msg sysmsg.Message) {

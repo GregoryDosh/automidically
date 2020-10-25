@@ -183,6 +183,9 @@ func (ca *CoreAudio) refreshHardwareDevices() {
 			log.Error(err)
 			continue
 		}
+		if dn, err := d.DeviceName(); err == nil {
+			log.Debugf("found device named '%s'", dn)
+		}
 		ca.allDevices = append(ca.allDevices, d)
 	}
 
@@ -220,9 +223,6 @@ func (ca *CoreAudio) onDeviceStateChanged(pwstrDeviceId string, dwNewState uint6
 
 // Cleanup is called by other packages to close down the event loop, clear any pointers, and get ready for shutdown.
 func (ca *CoreAudio) Cleanup() error {
-	log.Trace("Enter Cleanup")
-	defer log.Trace("Exit Cleanup")
-
 	if ca.cleanupChan != nil {
 		close(ca.cleanupChan)
 	}

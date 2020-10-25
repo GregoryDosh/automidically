@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	buildVersion          = "0.2.1"
+	buildVersion          = "0.3.0"
 	defaultLogFilename    = ""
 	configFilename        = ""
 	profileCPUFilename    string
@@ -30,7 +30,7 @@ func main() {
 		HelpName: "automidically",
 		Usage:    "hooks MIDI device inputs to Windows System Volume(s)",
 		Authors: []*cli.Author{
-			{Name: "Gregory Dosh", Email: "GregoryDosh@users.noreply.github.com"},
+			{Name: "Gregory Dosh"},
 		},
 		Version: buildVersion,
 		Action:  automidicallyMain,
@@ -126,8 +126,6 @@ func automidicallyMain(ctx *cli.Context) error {
 		logrus.AddHook(hook)
 	}
 
-	log.Trace("Enter automidicallyMain")
-	defer log.Trace("Exit automidicallyMain")
 	if profileCPUFilename != "" {
 		f, err := os.Create(profileCPUFilename)
 		if err != nil {
@@ -147,7 +145,7 @@ func automidicallyMain(ctx *cli.Context) error {
 	}).Info()
 
 	c := configurator.New(configFilename)
-	systray.Run(tray.Start(c.HandleSystrayMessage), tray.Stop())
+	systray.Run(tray.Start(c.HandleSystrayMessage), func() {})
 
 	if profileMemoryFilename != "" {
 		f, err := os.Create(profileMemoryFilename)

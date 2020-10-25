@@ -22,9 +22,6 @@ type Device struct {
 }
 
 func (d *Device) Cleanup() error {
-	log.Trace("Enter Cleanup")
-	defer log.Trace("Exit Cleanup")
-
 	if d.messageChan != nil {
 		close(d.messageChan)
 	}
@@ -45,8 +42,6 @@ func (d *Device) Cleanup() error {
 }
 
 func (d *Device) SetMessageCallback(cb func(int, int)) {
-	log.Trace("Enter SetMessageCallback")
-	defer log.Trace("Exit SetMessageCallback")
 	d.Lock()
 	defer d.Unlock()
 	d.messageCallback = cb
@@ -76,15 +71,10 @@ func (d *Device) handleMIDIMessageLoop() {
 }
 
 func New(searchName string) *Device {
-	log.Trace("Enter New")
-	defer log.Trace("Exit New")
-
 	if searchName == "" {
 		log.Error("missing MIDI device name")
 		return nil
 	}
-
-	log.Debugf("looking for MIDI device name containing %s", searchName)
 
 	drv, err := driver.New()
 	if err != nil {
@@ -99,7 +89,7 @@ func New(searchName string) *Device {
 	}
 
 	for _, in := range midiInputs {
-		log.Tracef("found device %s", in.String())
+		log.Debugf("found device named '%s'", in.String())
 		if strings.Contains(strings.ToLower(in.String()), strings.ToLower(searchName)) {
 			log.Infof("using MIDI device %s", in.String())
 			d := &Device{
@@ -113,7 +103,7 @@ func New(searchName string) *Device {
 		}
 	}
 
-	log.Errorf("unable to find MIDI input device containing %s", searchName)
+	log.Errorf("unable to find MIDI device containing '%s'", searchName)
 	drv.Close()
 	return nil
 }

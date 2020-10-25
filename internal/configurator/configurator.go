@@ -115,38 +115,28 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 	c.Mapping.Mixer = newMapping.Mapping.Mixer
 
 	// Shell
-	for _, m := range c.Mapping.Shell {
-		m.Cleanup()
-	}
-	c.Mapping.Shell = nil
-	for _, m := range newMapping.Mapping.Shell {
-		m.Initialize()
-		c.Mapping.Shell = append(c.Mapping.Shell, m)
-	}
+	c.Mapping.Shell = newMapping.Mapping.Shell
 
 	if c.MIDIDevice != nil {
 		c.MIDIDevice.SetMessageCallback(c.midiMessageCallback)
 	}
 
 	log.Debugf("completed configuration reload: %+v", c.Mapping)
-
 }
 
 func (c *Configurator) midiMessageCallback(cc int, v int) {
-	go func() {
-		c.Lock()
-		defer c.Unlock()
-		for _, m := range c.Mapping.Mixer {
+	c.Lock()
+	defer c.Unlock()
+	for _, m := range c.Mapping.Mixer {
+		go func(m mixer.Mapping) {
 			c.coreAudio.HandleMIDIMessage(&m, cc, v)
-		}
-	}()
-	go func() {
-		c.Lock()
-		defer c.Unlock()
-		for _, m := range c.Mapping.Shell {
+		}(m)
+	}
+	for _, m := range c.Mapping.Shell {
+		go func(m shell.Mapping) {
 			m.HandleMIDIMessage(cc, v)
-		}
-	}()
+		}(m)
+	}
 }
 
 func (c *Configurator) HandleSystrayMessage(msg systray.Message) {
@@ -177,9 +167,6 @@ func (c *Configurator) HandleSystrayMessage(msg systray.Message) {
 }
 
 func New(filename string) *Configurator {
-	log.Trace("Enter New")
-	defer log.Trace("Exit New")
-
 	ca, err := coreaudio.New()
 	if err != nil {
 		log.Error(err)

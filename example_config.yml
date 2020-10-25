@@ -1,39 +1,106 @@
-# Rename this to config.yml to use with the main application, or specify the updated name when opening.
+
+# Rename this from example_config.yml to config.yml to use with the main application.
+# This configuration file is hot-reloaded when changes are made so you can make updates and test
+# this live while Automidically is running.
+
+# midi_devicename determines which MIDI device Automidically will listen to for signal changes.
+# This only supports one device at the moment with no current plans to support multiple devices.
+# This is case insensitve and only needs to partially match to work.
+midi_devicename: nanoKONTROL2
+
+# mapping will assign the signals to different effects. Volume changes (mixer) is one, and terminal actions (shell)
+# is the other. They've got different parameters so read below to understand a bit more about how they work.
 mapping:
+  # mixer assigns a MIDI signal to a volume mixer change.
+  # Parameters include:
+  #   * cc       - (int) The control channel the device is sending the signal on.
+  #   * min      - (int) The minimum value the slider/input will be allowed to send. This is a clamped value.
+  #   * max      - (int) Just like min, except at the top instead bottom. Also clamped.
+  #   * reverse  - (boolean) Whether to reverse the value allowed from a control channel.
+  #                Use this to mix two different applications together on one channel if you'd like.
+  #   * filename - (string/array of strings) When a change is detected this will attempt to change the volume
+  #                of any application whose filename matches this. It's case insensitive but needs to match exactly.
+  #   * device   - (string/array of strings) The device option is a way of changing a specifically named input/output
+  #                device. This needs to match the name + description as reported by windows.
+  #   * special  - (string/array of strings) The special options include a few useful shortcuts for common actions.
+  #                system - The Windows' system sounds. Things like dings, alerts, etc. are controlled by this.
+  #                output - The system default output device
+  #                input - The system default input device
+  #                refresh_devices - Start a refresh of devices. This should be happening automatically, but here
+  #                                  you can trigger a manual refresh if desired.
+  #                refresh_sessions - Start a refresh of audio sessions. This shouldn't be needed generally since it
+  #                                   should be happening automatically, but use this if wanting a manual refresh.
   mixer:
+
+    # Example mapping control channel 0 to the process with the filename of 'game.exe'
     - cc: 0
       filename: game.exe
       reverse: true
       min: 0
       max: 64
 
+    # Duplicate control channels are okay, and it allows you to tie
+    # different min/max or reverse behavior to the same slider. Maybe you can
+    # use this to toggle the mix where you can fade one app to min while bringing
+    # another application to the max?
+    - cc: 0
+      filename: music.exe
+
+    # Multiple applications controlled by one slider.
     - cc: 1
       filename:
         - chrome.exe
         - firefox.exe
 
+    # Multiple types controlled by one slider.
     - cc: 2
       filename: mstsc.exe
+      device:
+        - Output1
+        - Output2
 
+    # Change the system default output device.
     - cc: 3
       special: output
 
+    # The 'system' special is Windows' System Sounds. Ding, Tada, etc.
     - cc: 4
       special: system
 
+    # device allows you to pick the exact name of an audio device to manage even if it's not the default.
     - cc: 5
-      device: Headphones
+      device: Speakers (High Definition Audio Device)
 
-    - cc: 6
-      filename: discord.exe
+    # The 'refresh_sessions' special instructs Automidically to refresh the available audio sessions.
+    # This should automatically happen as it detects new audio sessions but sometimes you might want
+    # to force it in case it didn't pick something up.
+    - cc: 71
+      special: refresh_sessions
 
-    - cc: 7
-      filename: YouTube Music Desktop App.exe
+  # shell will execute an action in the terminal based on receiving a MIDI message.
+  # This should probably really only be used on buttons and not faders or other high
+  # throughput channels since this could cause some really bad behavior. Be advised!
+  # Parameters include:
+  #   * cc              - (int) The control channel the device is sending the signal on.
+  #   * command         - (string/array of strings) The command that will be ran in the terminal.
+  #   * use_powershell  - (boolean) The default shell will be cmd.exe, but powershell.exe can be used instead.
+  #   * log_output      - (boolean) By default the output of the command will not be logged but you can change that if desired.
+  #   * suppress_errors - (boolean) By default errors will pop-up in the log but can be suppressed if desired.
   shell:
+    # This should cause an error that will pop-up in the log unless you have an ls program installed.
     - cc: 39
       command: ls
 
+    # This example will call powershell and pop-up a notification near the system tray.
     - cc: 55
-      command: dir
-
-midi_devicename: nanoKONTROL2
+      use_powershell: true
+      command: |
+        Add-Type -AssemblyName System.Windows.Forms
+        $global:balmsg = New-Object System.Windows.Forms.NotifyIcon
+        $path = (Get-Process -id $pid).Path
+        $balmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
+        $balmsg.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+        $balmsg.BalloonTipTitle = "Test Notification"
+        $balmsg.BalloonTipText = "Check it out!"
+        $balmsg.Visible = $true
+        $balmsg.ShowBalloonTip(2000)

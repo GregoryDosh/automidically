@@ -58,10 +58,3 @@ func Start(messageHandler func(Message)) func() {
 	}
 
 }
-
-func Stop() func() {
-	return func() {
-		log.Trace("Enter systrayStop")
-		defer log.Trace("Exit systrayStop")
-	}
-}

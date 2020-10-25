@@ -18,7 +18,7 @@ var (
 )
 
 const (
-	SystemAudioSession = "[SYSTEM]"
+	SystemAudioSession = "[System Process]"
 )
 
 type AudioSession struct {
@@ -75,8 +75,6 @@ func (a *AudioSession) SetVolumeLevel(v float32) error {
 
 // New takes in a *wca.IAudioSessionControl and wraps it as an *AudioSession with some nice helper methods to do common tasks like SetVolumeLevel, etc.
 func New(audioSessionEnumerator *wca.IAudioSessionEnumerator, audioSessionNumber int) (*AudioSession, error) {
-	isSystemSession := false
-
 	// This is an intermediate step of gathering the IAudioSessionControl so we can get IAudioSessionControl2 next.
 	var audioSessionControl *wca.IAudioSessionControl
 	if err := audioSessionEnumerator.GetSession(audioSessionNumber, &audioSessionControl); err != nil {
@@ -94,7 +92,6 @@ func New(audioSessionEnumerator *wca.IAudioSessionEnumerator, audioSessionNumber
 	// Grabbing the processID is a quick trick to figure out if this audio session is the System Sounds audio session or not.
 	var processId uint32
 	if err := audioSessionControl2.GetProcessId(&processId); err != nil {
-		isSystemSession = true
 		// This error code 0x889000D just means it's a multiprocess and non-unique.
 		// Which means it's the system sounds, if that's not the case then some error occured.
 		if err.(*ole.OleError).Code() != 0x889000D {
@@ -111,15 +108,11 @@ func New(audioSessionEnumerator *wca.IAudioSessionEnumerator, audioSessionNumber
 
 	// Snagging the name of the process executible that created this audio session.
 	var processExecutable string
-	if !isSystemSession {
-		process, err := ps.FindProcess(int(processId))
-		if err != nil {
-			return nil, fmt.Errorf("failed to find process: %w", err)
-		}
-		processExecutable = process.Executable()
-	} else {
-		processExecutable = SystemAudioSession
+	process, err := ps.FindProcess(int(processId))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find process: %w", err)
 	}
+	processExecutable = process.Executable()
 
 	as := &AudioSession{
 		audioSessionControl2: audioSessionControl2,
