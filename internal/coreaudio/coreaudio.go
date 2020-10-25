@@ -244,37 +244,34 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 		return
 	}
 
-	clampedValue := math.Max(m.Min, math.Min(m.Max, float64(v)))
-	newValue := float32(clampedValue / m.Max)
-	if m.Reverse {
-		newValue = 1 - newValue
-	}
+	clampedValue := clampValue(v, m.HardwareMin, m.HardwareMax)
+	volumeLevel := mapValue(clampedValue, m.HardwareMin, m.HardwareMax, m.VolumeMin, m.VolumeMax)
 
 	// special
 	for _, s := range m.Special {
-		// refresh_devices
-		if strings.EqualFold(s, "refresh_devices") {
+		// refreshDevices
+		if strings.EqualFold(s, "refreshDevices") {
 			ca.refreshHardwareDevicesChannel <- true
 		}
-		// refresh_sessions
-		if strings.EqualFold(s, "refresh_sessions") {
+		// refreshSessions
+		if strings.EqualFold(s, "refreshSessions") {
 			ca.refreshAudioSessionsChannel <- true
 		}
 		// output
 		if strings.EqualFold(s, "output") {
-			if err := ca.outputDevice.SetVolumeLevel(newValue); err != nil {
+			if err := ca.outputDevice.SetVolumeLevel(volumeLevel); err != nil {
 				log.Error(err)
 			}
 		}
 		// input
 		if strings.EqualFold(s, "input") {
-			if err := ca.inputDevice.SetVolumeLevel(newValue); err != nil {
+			if err := ca.inputDevice.SetVolumeLevel(volumeLevel); err != nil {
 				log.Error(err)
 			}
 		}
 		// system
 		if strings.EqualFold(s, "system") {
-			if err := ca.outputDevice.SetAudioSessionVolumeLevel(audiosession.SystemAudioSession, newValue); err != nil {
+			if err := ca.outputDevice.SetAudioSessionVolumeLevel(audiosession.SystemAudioSession, volumeLevel); err != nil {
 				log.Error(err)
 			}
 		}
@@ -282,7 +279,7 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 
 	// filename
 	for _, f := range m.Filename {
-		if err := ca.outputDevice.SetAudioSessionVolumeLevel(f, newValue); err != nil {
+		if err := ca.outputDevice.SetAudioSessionVolumeLevel(f, volumeLevel); err != nil {
 			if !errors.Is(err, device.AudioSessionNotFound) {
 				log.Error(err)
 			}
@@ -293,7 +290,7 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 	for _, dn := range m.Device {
 		for _, d := range ca.allDevices {
 			if name, _ := d.DeviceName(); strings.EqualFold(name, dn) {
-				if err := d.SetVolumeLevel(newValue); err != nil {
+				if err := d.SetVolumeLevel(volumeLevel); err != nil {
 					log.Error(err)
 				}
 			}
@@ -352,4 +349,19 @@ func New() (*CoreAudio, error) {
 	ca.refreshHardwareDevicesChannel <- true
 
 	return ca, nil
+}
+
+func clampValue(value, inputMin, inputMax int) int {
+	if value > inputMax {
+		return inputMax
+	}
+	if value < inputMin {
+		return inputMin
+	}
+	return value
+}
+
+func mapValue(value, inputMin, inputMax int, outputMin, outputMax float32) float32 {
+	value = int(math.Max(float64(inputMin), math.Min(float64(inputMax), float64(value))))
+	return float32(value-inputMin)/float32(inputMax-inputMin)*float32(outputMax-outputMin) + float32(outputMin)
 }

@@ -1,6 +1,8 @@
 package mixer
 
 import (
+	"fmt"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -9,22 +11,24 @@ var (
 )
 
 type Mapping struct {
-	Cc       int      `yaml:"cc"`
-	Reverse  bool     `yaml:"reverse"`
-	Min      float64  `yaml:"min"`
-	Max      float64  `yaml:"max"`
-	Filename []string `yaml:"-"`
-	Special  []string `yaml:"-"`
-	Device   []string `yaml:"-"`
+	Cc          int      `yaml:"cc"`
+	HardwareMin int      `yaml:"hardwareMin"`
+	HardwareMax int      `yaml:"hardwareMax"`
+	VolumeMin   float32  `yaml:"volumeMin"`
+	VolumeMax   float32  `yaml:"volumeMax"`
+	Filename    []string `yaml:"-"`
+	Special     []string `yaml:"-"`
+	Device      []string `yaml:"-"`
 }
 
 func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	// This is so we can set some default values if not specified in the config.
 	type rawMapping Mapping
 	raw := rawMapping{
-		Reverse: false,
-		Min:     0,
-		Max:     127,
+		HardwareMin: 0,
+		HardwareMax: 127,
+		VolumeMin:   0,
+		VolumeMax:   1,
 	}
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -65,5 +69,18 @@ func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	*m = Mapping(raw)
+	return nil
+}
+
+func (m *Mapping) Validate() error {
+	if m.HardwareMin > m.HardwareMax {
+		return fmt.Errorf("hardware minimum %d should not be greater than maximum %d", m.HardwareMin, m.HardwareMax)
+	}
+	if m.VolumeMin < 0 || m.VolumeMin > 1 {
+		return fmt.Errorf("volume minimum %f should be in range [0,1]", m.VolumeMin)
+	}
+	if m.VolumeMax < 0 || m.VolumeMax > 1 {
+		return fmt.Errorf("volume maximum %f should be in range [0,1]", m.VolumeMax)
+	}
 	return nil
 }

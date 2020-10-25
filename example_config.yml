@@ -3,93 +3,114 @@
 # This configuration file is hot-reloaded when changes are made so you can make updates and test
 # this live while Automidically is running.
 
-# midi_devicename determines which MIDI device Automidically will listen to for signal changes.
+# midiDevicename determines which MIDI device Automidically will listen to for signal changes.
 # This only supports one device at the moment with no current plans to support multiple devices.
 # This is case insensitve and only needs to partially match to work.
-midi_devicename: nanoKONTROL2
+midiDevicename: nanoKONTROL2
 
 # mapping will assign the signals to different effects. Volume changes (mixer) is one, and terminal actions (shell)
 # is the other. They've got different parameters so read below to understand a bit more about how they work.
 mapping:
   # mixer assigns a MIDI signal to a volume mixer change.
   # Parameters include:
-  #   * cc       - (int) The control channel the device is sending the signal on.
-  #   * min      - (int) The minimum value the slider/input will be allowed to send. This is a clamped value.
-  #   * max      - (int) Just like min, except at the top instead bottom. Also clamped.
-  #   * reverse  - (boolean) Whether to reverse the value allowed from a control channel.
-  #                Use this to mix two different applications together on one channel if you'd like.
-  #   * filename - (string/array of strings) When a change is detected this will attempt to change the volume
-  #                of any application whose filename matches this. It's case insensitive but needs to match exactly.
-  #   * device   - (string/array of strings) The device option is a way of changing a specifically named input/output
-  #                device. This needs to match the name + description as reported by windows.
-  #   * special  - (string/array of strings) The special options include a few useful shortcuts for common actions.
-  #                * system           - The Windows' system sounds. Things like dings, alerts, etc. are controlled by this.
-  #                * output           - The system default output device
-  #                * input            - The system default input device
-  #                * refresh_devices  - Start a refresh of devices. This should be happening automatically, but here
-  #                                     you can trigger a manual refresh if desired.
-  #                * refresh_sessions - Start a refresh of audio sessions. This shouldn't be needed generally since it
-  #                                     should be happening automatically, but use this if wanting a manual refresh.
+  #   * cc          - (int) The control channel the device is sending the signal on.
+  #   * hardwareMin - (int) The minimum value the fader/input will be allowed to send.
+  #                         If set higher than actual, the value will be clamped. Default 0.
+  #   * hardwareMax - (int) Just like min, except at the top instead bottom. Also clamped to lowest value. Default 127.
+  #                         The hardwareMax needs to be greater than or equal to hardwareMin.
+  #   * volumeMin   - (float) The hardwareMin/Max will be mapped to the range [volMin, volMax]. Default value 0.
+  #   * volumeMax   - (float) The hardwareMin/Max will be mapped to the range [volMin, volMax]. Devault value 1.
+  #                           If volumeMin > volumeMax then this is reverse mapping and will in effect reverse the
+  #                           direction of which minimum or maximum is attained.
+  #   * filename    - (string/array of strings) When a change is detected this will attempt to change the volume
+  #                   of any application whose filename matches this. It's case insensitive but needs to match exactly.
+  #   * device      - (string/array of strings) The device option is a way of changing a specifically named input/output
+  #                   device. This needs to match the name + description as reported by windows.
+  #   * special     - (string/array of strings) The special options include a few useful shortcuts for common actions.
+  #                   * system          - The Windows' system sounds. Things like dings, alerts, etc. are controlled by this.
+  #                   * output          - The system default output device
+  #                   * input           - The system default input device
+  #                   * refreshDevices  - Start a refresh of devices. This should be happening automatically, but here
+  #                                       you can trigger a manual refresh if desired.
+  #                   * refreshSessions - Start a refresh of audio sessions. This shouldn't be needed generally since it
+  #                                       should be happening automatically, but use this if wanting a manual refresh.
   mixer:
 
     # Example mapping control channel 0 to the process with the filename of 'game.exe'
+    # Even if the fader can output less than 32 or more than 64, it will be clamped to those values.
+    # E.g. a value of 24  from hardware will be sent as 32, and a value of 127 will be sent as a value of 64.
+    # After the clamping the value will be mapped to the range [volumeMin, volumeMax]. In this example
+    # the mapping will look like [32, 64] -> [0, 1]
     - cc: 0
       filename: game.exe
-      reverse: true
-      min: 0
-      max: 64
+      hardwareMin: 32
+      hardwareMax: 64
+
+    # Example mapping control channel 1 to the process with the filename of 'game2.exe'
+    # In this case the volume mapping is reversed by swapping the volumeMin & volumeMax.
+    - cc: 1
+      filename: game2.exe
+      hardwareMin: 32
+      hardwareMax: 64
+      volumeMin: 1
+      volumeMax: 0
 
     # Duplicate control channels are okay, and it allows you to tie
     # different min/max or reverse behavior to the same slider. Maybe you can
     # use this to toggle the mix where you can fade one app to min while bringing
     # another application to the max?
-    - cc: 0
+    - cc: 2
+      filename: game3.exe
+
+    - cc: 2
       filename: music.exe
+      volumeMin: 1
+      volumeMax: 0
 
     # Multiple applications controlled by one slider.
-    - cc: 1
+    - cc: 3
       filename:
         - chrome.exe
         - firefox.exe
 
     # Multiple types controlled by one slider.
-    - cc: 2
+    - cc: 4
       filename: mstsc.exe
       device:
         - Output1
         - Output2
 
     # Change the system default output device.
-    - cc: 3
+    - cc: 5
       special: output
 
     # The 'system' special is Windows' System Sounds. Ding, Tada, etc.
-    - cc: 4
+    - cc: 6
       special: system
 
     # device allows you to pick the exact name of an audio device to manage even if it's not the default.
-    - cc: 5
+    - cc: 7
       device: Speakers (High Definition Audio Device)
 
-    # The 'refresh_sessions' special instructs Automidically to refresh the available audio sessions.
+    # The 'refreshSessions' special instructs Automidically to refresh the available audio sessions.
     # This should automatically happen as it detects new audio sessions but sometimes you might want
     # to force it in case it didn't pick something up.
     - cc: 71
-      special: refresh_sessions
+      special: refreshSessions
 
   # shell will execute an action in the terminal based on receiving a MIDI message.
   # This should probably really only be used on buttons and not faders or other high
   # throughput channels since this could cause some really bad behavior. Be advised!
   # Parameters include:
-  #   * cc              - (int) The control channel the device is sending the signal on.
-  #   * command         - (string/array of strings) The command that will be ran in the terminal.
-  #   * use_powershell  - (boolean) The default shell will be cmd.exe, but powershell.exe can be used instead.
-  #   * log_output      - (boolean) By default the output of the command will not be logged but you can change that if desired.
-  #   * suppress_errors - (boolean) By default errors will pop-up in the log but can be suppressed if desired.
-  #   * template        - (boolean) Treat the command as a go template, this means you'll be able to inject the following values and use common template language.
-  #                       into the command you've specified.
-  #                       * CC    (int) - Control Channel
-  #                       * Value (int) - The value sent by the MIDI device.
+  #   * cc             - (int) The control channel the device is sending the signal on.
+  #   * command        - (string/array of strings) The command that will be ran in the terminal.
+  #   * usePowershell  - (boolean) The default shell will be cmd.exe, but powershell.exe can be used instead.
+  #   * logOutput      - (boolean) By default the output of the command will not be logged but you can change that if desired.
+  #   * suppressErrors - (boolean) By default errors will pop-up in the log but can be suppressed if desired.
+  #   * template       - (boolean) Treat the command as a go template, this means you'll be able to inject the following values
+  #                                and use common template language into the command you've specified.
+  #                                * CC    (int) - Control Channel
+  #                                * Value (int) - The value sent by the MIDI device.
   shell:
     # This should cause an error that will pop-up in the log unless you have an ls program installed.
     - cc: 39
@@ -97,7 +118,7 @@ mapping:
 
     # This example will call powershell and pop-up a notification near the system tray.
     - cc: 55
-      use_powershell: true
+      usePowershell: true
       template: true
       command: |
         Add-Type -AssemblyName System.Windows.Forms

@@ -28,7 +28,7 @@ type Configurator struct {
 	filename       string
 	Mapping        MappingOptions `yaml:"mapping,omitempty"`
 	MIDIDevice     *midi.Device
-	MIDIDeviceName string `yaml:"midi_devicename"`
+	MIDIDeviceName string `yaml:"midiDevicename"`
 	coreAudio      *coreaudio.CoreAudio
 	reloadConfig   chan bool
 	sync.Mutex
@@ -87,7 +87,7 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 	// if it's not needed since we could have a bad config.
 	newMapping := struct {
 		Mapping        MappingOptions `yaml:"mapping"`
-		MIDIDeviceName string         `yaml:"midi_devicename"`
+		MIDIDeviceName string         `yaml:"midiDevicename"`
 	}{}
 	if err := yaml.Unmarshal(f, &newMapping); err != nil {
 		log.Errorf("unable to parse new config: %s", err)
@@ -112,6 +112,12 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 	}
 
 	// Mixer
+	for _, mapping := range newMapping.Mapping.Mixer {
+		if err := mapping.Validate(); err != nil {
+			log.Errorf("unable to parse new config: %s", err)
+			return
+		}
+	}
 	c.Mapping.Mixer = newMapping.Mapping.Mixer
 
 	// Shell

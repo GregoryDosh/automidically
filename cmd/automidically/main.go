@@ -86,40 +86,40 @@ func main() {
 }
 
 func automidicallyMain(ctx *cli.Context) error {
-	var ll logrus.Level
+	var logLevel logrus.Level
 	switch ctx.String("log_level") {
 	case "trace", "t":
-		ll = logrus.TraceLevel
+		logLevel = logrus.TraceLevel
 	case "debug", "d":
-		ll = logrus.DebugLevel
+		logLevel = logrus.DebugLevel
 	case "info", "i":
-		ll = logrus.InfoLevel
+		logLevel = logrus.InfoLevel
 	case "warn", "w":
-		ll = logrus.WarnLevel
+		logLevel = logrus.WarnLevel
 	case "error", "e":
-		ll = logrus.ErrorLevel
+		logLevel = logrus.ErrorLevel
 	case "fatal", "f":
-		ll = logrus.FatalLevel
+		logLevel = logrus.FatalLevel
 	case "panic", "p":
-		ll = logrus.PanicLevel
+		logLevel = logrus.PanicLevel
 	default:
-		ll = logrus.InfoLevel
+		logLevel = logrus.InfoLevel
 	}
-	logrus.SetLevel(ll)
+	logrus.SetLevel(logLevel)
 
 	if ctx.Bool("notifications") {
 		toast := toaster.New(logrus.WarnLevel, &logrus.JSONFormatter{})
 		logrus.AddHook(toast)
 	}
 
-	log_path := ctx.String("log_path")
-	if log_path != "" {
+	logPath := ctx.String("log_path")
+	if logPath != "" {
 		opts := &lumberjackrus.LogFile{
-			Filename:   log_path,
+			Filename:   logPath,
 			MaxSize:    10,
 			MaxBackups: 2,
 		}
-		hook, err := lumberjackrus.NewHook(opts, ll, &logrus.JSONFormatter{}, nil)
+		hook, err := lumberjackrus.NewHook(opts, logLevel, &logrus.JSONFormatter{}, nil)
 		if err != nil {
 			log.Fatal(err)
 		}

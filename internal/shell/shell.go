@@ -16,9 +16,9 @@ var log = logrus.WithField("module", "shell")
 type Mapping struct {
 	Cc             int      `yaml:"cc"`
 	Command        []string `yaml:"-"`
-	LogOutput      bool     `yaml:"log_output"`
-	SuppressErrors bool     `yaml:"suppress_errors"`
-	UsePowershell  bool     `yaml:"use_powershell"`
+	LogOutput      bool     `yaml:"logOutput"`
+	SuppressErrors bool     `yaml:"suppressErrors"`
+	UsePowershell  bool     `yaml:"usePowershell"`
 	IsTemplate     bool     `yaml:"template"`
 	template       *template.Template
 }
