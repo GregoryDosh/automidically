@@ -81,8 +81,10 @@ mapping:
         - Output2
 
     # Change the system default output device.
+    # Limit the maximum volume to 50%.
     - cc: 5
       special: output
+      volumeMax: 0.5
 
     # The 'system' special is Windows' System Sounds. Ding, Tada, etc.
     - cc: 6
