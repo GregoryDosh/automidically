@@ -1,8 +1,11 @@
 package shell
 
 import (
+	"bytes"
 	"os/exec"
+	"strings"
 	"syscall"
+	"text/template"
 
 	sysmsg "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/sirupsen/logrus"
@@ -16,6 +19,8 @@ type Mapping struct {
 	LogOutput      bool     `yaml:"log_output"`
 	SuppressErrors bool     `yaml:"suppress_errors"`
 	UsePowershell  bool     `yaml:"use_powershell"`
+	IsTemplate     bool     `yaml:"template"`
+	template       *template.Template
 }
 
 func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -39,6 +44,15 @@ func (m *Mapping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		m.Command = cSlice.Command
 	}
 
+	// If this is supposed to be a template, parse it now.
+	if m.IsTemplate {
+		t, err := template.New("").Parse(strings.Join(m.Command, "\r\n"))
+		if err != nil {
+			return err
+		}
+		m.template = t
+	}
+
 	return nil
 }
 
@@ -54,7 +68,19 @@ func (m *Mapping) HandleMIDIMessage(c int, v int) {
 		args = []string{"-NoProfile", "-NonInteractive"}
 	}
 
-	args = append(args, m.Command...)
+	if m.template == nil {
+		args = append(args, m.Command...)
+	} else {
+		composed, err := templateToString(m.template, struct {
+			CC    int
+			Value int
+		}{c, v})
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		args = append(args, composed)
+	}
 
 	cmd := exec.Command(exe, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -70,4 +96,12 @@ func (m *Mapping) HandleMIDIMessage(c int, v int) {
 }
 
 func HandleSystrayMessage(msg sysmsg.Message) {
+}
+
+func templateToString(t *template.Template, data interface{}) (string, error) {
+	var b bytes.Buffer
+	if err := t.Execute(&b, data); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }

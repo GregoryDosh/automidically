@@ -121,7 +121,8 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 		c.MIDIDevice.SetMessageCallback(c.midiMessageCallback)
 	}
 
-	log.Debugf("completed configuration reload: %+v", c.Mapping)
+	log.Debug("completed configuration reload")
+	log.Tracef("%+v", c.Mapping)
 }
 
 func (c *Configurator) midiMessageCallback(cc int, v int) {

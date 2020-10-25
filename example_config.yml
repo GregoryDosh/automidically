@@ -23,13 +23,13 @@ mapping:
   #   * device   - (string/array of strings) The device option is a way of changing a specifically named input/output
   #                device. This needs to match the name + description as reported by windows.
   #   * special  - (string/array of strings) The special options include a few useful shortcuts for common actions.
-  #                system - The Windows' system sounds. Things like dings, alerts, etc. are controlled by this.
-  #                output - The system default output device
-  #                input - The system default input device
-  #                refresh_devices - Start a refresh of devices. This should be happening automatically, but here
-  #                                  you can trigger a manual refresh if desired.
-  #                refresh_sessions - Start a refresh of audio sessions. This shouldn't be needed generally since it
-  #                                   should be happening automatically, but use this if wanting a manual refresh.
+  #                * system           - The Windows' system sounds. Things like dings, alerts, etc. are controlled by this.
+  #                * output           - The system default output device
+  #                * input            - The system default input device
+  #                * refresh_devices  - Start a refresh of devices. This should be happening automatically, but here
+  #                                     you can trigger a manual refresh if desired.
+  #                * refresh_sessions - Start a refresh of audio sessions. This shouldn't be needed generally since it
+  #                                     should be happening automatically, but use this if wanting a manual refresh.
   mixer:
 
     # Example mapping control channel 0 to the process with the filename of 'game.exe'
@@ -86,6 +86,10 @@ mapping:
   #   * use_powershell  - (boolean) The default shell will be cmd.exe, but powershell.exe can be used instead.
   #   * log_output      - (boolean) By default the output of the command will not be logged but you can change that if desired.
   #   * suppress_errors - (boolean) By default errors will pop-up in the log but can be suppressed if desired.
+  #   * template        - (boolean) Treat the command as a go template, this means you'll be able to inject the following values and use common template language.
+  #                       into the command you've specified.
+  #                       * CC    (int) - Control Channel
+  #                       * Value (int) - The value sent by the MIDI device.
   shell:
     # This should cause an error that will pop-up in the log unless you have an ls program installed.
     - cc: 39
@@ -94,13 +98,14 @@ mapping:
     # This example will call powershell and pop-up a notification near the system tray.
     - cc: 55
       use_powershell: true
+      template: true
       command: |
         Add-Type -AssemblyName System.Windows.Forms
         $global:balmsg = New-Object System.Windows.Forms.NotifyIcon
         $path = (Get-Process -id $pid).Path
         $balmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
-        $balmsg.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+        $balmsg.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::{{ if eq .Value 0 }}Info{{ else }}Warning{{ end }}
         $balmsg.BalloonTipTitle = "Test Notification"
-        $balmsg.BalloonTipText = "Check it out!"
+        $balmsg.BalloonTipText = "Message received on {{ .CC }}!"
         $balmsg.Visible = $true
         $balmsg.ShowBalloonTip(2000)
