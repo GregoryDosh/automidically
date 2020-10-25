@@ -1,6 +1,10 @@
 # AutoMIDIcally
 
-This is no-where near ready for use yet, but the idea is to be able to control the windows volume sliders for individual applications/devices using real hardware sliders on a MIDI device. I was frustrated with "Power Mixer" disconnecting from my MIDI device and just generally misbehaving and being way more than I really wanted to have for simply mapping a fader to an application.
+![nanoKONTROL2](/assets/nanoKONTROL2%20Example.png "Shiprock, New Mexico by Beau Rogers")
+
+AutoMIDIcally gives Windows users an ability to map buttons, faders, etc. on a MIDI device to actions within windows. The major feature is being able to control the volumes for applications independently by mapping real faders to the same applications you'd see in the Volume Mixer within Windows. There is also some small integrations with shell actions based on button inputs, so if you can control it from the command line you should be able to control it through your MIDI device.
+
+The reason I made this is because I was frustrated with "Power Mixer" disconnecting from my MIDI device and just generally misbehaving and being way more than I really wanted to have for simply mapping a fader to an application. It also didn't allow the flexibility that I really wanted to have with easily mapping multiple applications to a mixer without multiple menus and duplicating GUI settings, it wasn't as quick as open text file, edit, save.
 
 ## Usage
 Take a look at the [example config](example_config.yml) to see the configuration parameters. The application is currently only designed for Windows 10, but it will search for MIDI devices with a particular name and then take a mapping of application names (or shell actions) that will control when a signal is received.
