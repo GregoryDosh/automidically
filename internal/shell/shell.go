@@ -2,6 +2,7 @@ package shell
 
 import (
 	"os/exec"
+	"syscall"
 
 	sysmsg "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/sirupsen/logrus"
@@ -56,6 +57,8 @@ func (m *Mapping) HandleMIDIMessage(c int, v int) {
 	args = append(args, m.Command...)
 
 	cmd := exec.Command(exe, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
 	output, err := cmd.CombinedOutput()
 	if err != nil && !m.SuppressErrors {
 		log.Errorf("%s returned error %s", m.Command, err)
