@@ -3,6 +3,7 @@ package audiosession
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"unsafe"
 
 	ole "github.com/go-ole/go-ole"
@@ -24,11 +25,14 @@ type AudioSession struct {
 	ProcessExecutable    string
 	audioSessionControl2 *wca.IAudioSessionControl2
 	simpleAudioVolume    *wca.ISimpleAudioVolume
+	sync.Mutex
 }
 
 // Cleanup will release and remove any pointers or leftover devices from the creation process.
 func (a *AudioSession) Cleanup() error {
 	log.Tracef("cleaning up %s", a.ProcessExecutable)
+	a.Lock()
+	defer a.Unlock()
 	if a.simpleAudioVolume != nil {
 		a.simpleAudioVolume.Release()
 	}
@@ -41,6 +45,9 @@ func (a *AudioSession) Cleanup() error {
 
 // SetVolumeLevel takes a float between 0-1 and it will set the volume of the audio session to that value.
 func (a *AudioSession) SetVolumeLevel(v float32) error {
+	a.Lock()
+	defer a.Unlock()
+
 	if (v < 0) || (1 < v) {
 		return fmt.Errorf("invalid volume level %f", v)
 	}

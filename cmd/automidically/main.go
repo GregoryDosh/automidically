@@ -148,7 +148,6 @@ func automidicallyMain(ctx *cli.Context) error {
 
 	c := configurator.New(configFilename)
 	systray.Run(tray.Start(c.HandleSystrayMessage), tray.Stop())
-	log.Info("Exiting...")
 
 	if profileMemoryFilename != "" {
 		f, err := os.Create(profileMemoryFilename)

@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/GregoryDosh/automidically/internal/coreaudio/audiosession"
+	"github.com/bep/debounce"
 	"github.com/moutend/go-wca/pkg/wca"
 	"github.com/sirupsen/logrus"
 )
@@ -19,14 +22,25 @@ var (
 )
 
 type Device struct {
-	mmd           *wca.IMMDevice
-	aev           *wca.IAudioEndpointVolume
-	audioSessions []*audiosession.AudioSession
+	mmd                  *wca.IMMDevice
+	aev                  *wca.IAudioEndpointVolume
+	audioSessions        []*audiosession.AudioSession
+	audioSessionManager2 *wca.IAudioSessionManager2
+	sessionNotification  *wca.IAudioSessionNotification
 	sync.Mutex
 }
 
 // Cleanup will release and remove any pointers or leftover devices from the creation process.
 func (d *Device) Cleanup() error {
+	d.Lock()
+	defer d.Unlock()
+
+	if d.audioSessionManager2 != nil {
+		if err := d.audioSessionManager2.UnregisterSessionNotification(d.sessionNotification); err != nil {
+			log.Error(err)
+		}
+		d.audioSessionManager2.Release()
+	}
 	for _, as := range d.audioSessions {
 		if err := as.Cleanup(); err != nil {
 			return err
@@ -74,9 +88,30 @@ func (d *Device) GetVolumeLevel() (float32, error) {
 	return v, nil
 }
 
+// createDebouncedOnSessionCreateFunction is called when there is a new audio session created on this device.
+// This looks really weird because the onSessionCreated function can get called many times
+// in rapid succession so we want to debounce that function call. But the callback has to take
+// a very specific format, so we wrap it up. On top of that the debounce function also wants a particular
+// signature, so it needs to get wrapped up too.
+func (d *Device) createDebouncedOnSessionCreateFunction() func(*wca.IAudioSessionControl) (hResult uintptr) {
+	deb := debounce.New(time.Second * 1)
+	wrappedFunc := func() {
+		log.Trace("detected onSessionCreate event")
+		if err := d.RefreshAudioSessions(); err != nil {
+			log.Error(err)
+		}
+	}
+	return func(s *wca.IAudioSessionControl) (hResult uintptr) {
+		deb(wrappedFunc)
+		return
+	}
+}
+
 // RefreshAudioSessions will attempt to repopulate all of the stored audio session information
 // for use with the SetAudioSessionVolume, GetAudioSessionVolume, etc.
 func (d *Device) RefreshAudioSessions() error {
+	d.Lock()
+	defer d.Unlock()
 	if d.mmd == nil {
 		return UninitializedDeviceError
 	}
@@ -90,15 +125,32 @@ func (d *Device) RefreshAudioSessions() error {
 	d.audioSessions = nil
 
 	// The IAudioSessionManager2 is for managing submixes for an audio device.
-	var audioSessionManager2 *wca.IAudioSessionManager2
-	if err := d.mmd.Activate(wca.IID_IAudioSessionManager2, wca.CLSCTX_ALL, nil, &audioSessionManager2); err != nil {
+	if err := d.mmd.Activate(wca.IID_IAudioSessionManager2, wca.CLSCTX_ALL, nil, &d.audioSessionManager2); err != nil {
 		return fmt.Errorf("failed to create IAudioSessionManager2: %w", err)
 	}
-	defer audioSessionManager2.Release()
+
+	// This will let us be notified of new audio sessions happening on the device so we can rescan
+	if d.sessionNotification == nil {
+		debouncedOnSessionCreate := d.createDebouncedOnSessionCreateFunction()
+		noopCallback := func(sess *wca.IAudioSessionControl) (hResult uintptr) {
+			return
+		}
+		d.sessionNotification = &wca.IAudioSessionNotification{
+			VTable: &wca.IAudioSessionNotificationVtbl{
+				OnSessionCreated: syscall.NewCallback(debouncedOnSessionCreate),
+				AddRef:           syscall.NewCallback(noopCallback),
+				Release:          syscall.NewCallback(noopCallback),
+				QueryInterface:   syscall.NewCallback(noopCallback),
+			},
+		}
+	}
+	if err := d.audioSessionManager2.RegisterSessionNotification(d.sessionNotification); err != nil {
+		log.Error(err)
+	}
 
 	// The IAudioSessionEnumerator will enable the enumeration of the audio sessions
 	var audioSessionEnumerator *wca.IAudioSessionEnumerator
-	if err := audioSessionManager2.GetSessionEnumerator(&audioSessionEnumerator); err != nil {
+	if err := d.audioSessionManager2.GetSessionEnumerator(&audioSessionEnumerator); err != nil {
 		return fmt.Errorf("failed to create IAudioSessionEnumerator: %w", err)
 	}
 	defer audioSessionEnumerator.Release()
