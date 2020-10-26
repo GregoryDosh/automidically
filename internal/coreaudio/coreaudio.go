@@ -127,35 +127,36 @@ func (ca *CoreAudio) refreshHardwareDevices() {
 	var outDev *wca.IMMDevice
 	if err := ca.deviceEnumerator.GetDefaultAudioEndpoint(wca.ERender, wca.EConsole, &outDev); err != nil {
 		log.Warn("no default output device detected")
-		return
 	}
-
-	if ca.outputDevice, err = device.New(outDev); err != nil {
-		if errors.Is(err, device.MissingAudioEndpointVolume) {
-			log.Debug(err)
-		} else {
-			log.Error(err)
+	if outDev != nil {
+		if ca.outputDevice, err = device.New(outDev); err != nil {
+			if errors.Is(err, device.MissingAudioEndpointVolume) {
+				log.Debug(err)
+			} else {
+				log.Error(err)
+			}
 		}
-	}
-	if name, err := ca.outputDevice.DeviceName(); err != nil {
-		log.Infof("using default output device named: %s", name)
+		if name, err := ca.outputDevice.DeviceName(); err != nil {
+			log.Infof("using default output device named: %s", name)
+		}
 	}
 
 	// Default Input Device
 	var inDev *wca.IMMDevice
 	if err := ca.deviceEnumerator.GetDefaultAudioEndpoint(wca.ECapture, wca.EConsole, &inDev); err != nil {
 		log.Warn("no default input device detected")
-		return
 	}
-	if ca.inputDevice, err = device.New(inDev); err != nil {
-		if errors.Is(err, device.MissingAudioEndpointVolume) {
-			log.Debug(err)
-		} else {
-			log.Error(err)
+	if inDev != nil {
+		if ca.inputDevice, err = device.New(inDev); err != nil {
+			if errors.Is(err, device.MissingAudioEndpointVolume) {
+				log.Debug(err)
+			} else {
+				log.Error(err)
+			}
 		}
-	}
-	if name, err := ca.inputDevice.DeviceName(); err != nil {
-		log.Infof("using default input device named: %s", name)
+		if name, err := ca.inputDevice.DeviceName(); err != nil {
+			log.Infof("using default input device named: %s", name)
+		}
 	}
 
 	// Since the default devices change, refresh their audio sessions too.
@@ -240,10 +241,6 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 
 	ca.deviceLock.Lock()
 	defer ca.deviceLock.Unlock()
-	if ca.outputDevice == nil {
-		return
-	}
-
 	clampedValue := clampValue(v, m.HardwareMin, m.HardwareMax)
 	volumeLevel := mapValue(clampedValue, m.HardwareMin, m.HardwareMax, m.VolumeMin, m.VolumeMax)
 
@@ -259,29 +256,37 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 		}
 		// output
 		if strings.EqualFold(s, "output") {
-			if err := ca.outputDevice.SetVolumeLevel(volumeLevel); err != nil {
-				log.Error(err)
+			if ca.outputDevice != nil {
+				if err := ca.outputDevice.SetVolumeLevel(volumeLevel); err != nil {
+					log.Error(err)
+				}
 			}
 		}
 		// input
 		if strings.EqualFold(s, "input") {
-			if err := ca.inputDevice.SetVolumeLevel(volumeLevel); err != nil {
-				log.Error(err)
+			if ca.inputDevice != nil {
+				if err := ca.inputDevice.SetVolumeLevel(volumeLevel); err != nil {
+					log.Error(err)
+				}
 			}
 		}
 		// system
 		if strings.EqualFold(s, "system") {
-			if err := ca.outputDevice.SetAudioSessionVolumeLevel(audiosession.SystemAudioSession, volumeLevel); err != nil {
-				log.Error(err)
+			if ca.outputDevice != nil {
+				if err := ca.outputDevice.SetAudioSessionVolumeLevel(audiosession.SystemAudioSession, volumeLevel); err != nil {
+					log.Error(err)
+				}
 			}
 		}
 	}
 
 	// filename
-	for _, f := range m.Filename {
-		if err := ca.outputDevice.SetAudioSessionVolumeLevel(f, volumeLevel); err != nil {
-			if !errors.Is(err, device.AudioSessionNotFound) {
-				log.Error(err)
+	if ca.outputDevice != nil {
+		for _, f := range m.Filename {
+			if err := ca.outputDevice.SetAudioSessionVolumeLevel(f, volumeLevel); err != nil {
+				if !errors.Is(err, device.AudioSessionNotFound) {
+					log.Error(err)
+				}
 			}
 		}
 	}
