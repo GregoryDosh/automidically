@@ -72,7 +72,6 @@ func (ca *CoreAudio) coreAudioEventLoop() {
 
 	ddev := debounce.New(time.Second * 1)
 	dses := debounce.New(time.Second * 1)
-	dsesLong := debounce.New(time.Second * 5)
 
 	for {
 		select {
@@ -81,14 +80,9 @@ func (ca *CoreAudio) coreAudioEventLoop() {
 		case <-ca.refreshHardwareDevicesChannel:
 			log.Debug("default audio devices change detected")
 			ddev(ca.refreshHardwareDevices)
-		case instantRefresh := <-ca.refreshAudioSessionsChannel:
-			if instantRefresh {
-				log.Trace("triggering audio session refresh")
-				dses(ca.refreshAudioSessions)
-			} else {
-				log.Trace("triggering heavily debounced audio session refresh")
-				dsesLong(ca.refreshAudioSessions)
-			}
+		case <-ca.refreshAudioSessionsChannel:
+			log.Trace("triggering audio session refresh")
+			dses(ca.refreshAudioSessions)
 		}
 	}
 }
