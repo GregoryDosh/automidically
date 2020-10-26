@@ -103,7 +103,9 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 
 	// Midi Device Cleanup & Initialiation
 	if !strings.EqualFold(newMapping.MIDIDeviceName, c.MIDIDeviceName) {
-		log.Trace("MIDI device name changed")
+		if c.MIDIDeviceName != "" {
+			log.Trace("MIDI device name changed")
+		}
 		if c.MIDIDevice != nil {
 			if err := c.MIDIDevice.Cleanup(); err != nil {
 				log.Error(err)

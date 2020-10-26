@@ -98,7 +98,9 @@ func (d *Device) createDebouncedOnSessionCreateFunction() func(*wca.IAudioSessio
 	wrappedFunc := func() {
 		log.Trace("detected onSessionCreate event")
 		if err := d.RefreshAudioSessions(); err != nil {
-			log.Error(err)
+			if !errors.Is(err, UninitializedDeviceError) {
+				log.Error(err)
+			}
 		}
 	}
 	return func(s *wca.IAudioSessionControl) (hResult uintptr) {

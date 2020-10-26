@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	buildVersion          = "0.3.3"
+	buildVersion          = "0.3.4"
 	defaultLogFilename    = ""
 	configFilename        = ""
 	profileCPUFilename    string
