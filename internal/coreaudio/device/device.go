@@ -194,6 +194,8 @@ func (d *Device) SetVolumeLevel(v float32) error {
 
 // SetAudioSessionVolumeLevel takes the sessionName which is the string to match on the ProcessExecutable of the sessions and a float between 0-1 to set the volume of any matching sessions.
 func (d *Device) SetAudioSessionVolumeLevel(sessionName string, v float32) error {
+	d.Lock()
+	defer d.Unlock()
 	foundSession := false
 
 	for _, f := range d.audioSessions {
