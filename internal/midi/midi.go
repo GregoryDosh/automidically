@@ -64,9 +64,11 @@ func (d *Device) handleMIDIMessageLoop() {
 	}
 
 	for msg := range d.messageChan {
+		d.Lock()
 		if d.messageCallback != nil {
 			d.messageCallback(msg[0], msg[1])
 		}
+		d.Unlock()
 	}
 }
 
