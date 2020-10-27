@@ -28,8 +28,9 @@ mapping:
   #                   device. This needs to match the name + description as reported by windows.
   #   * special     - (string/array of strings) The special options include a few useful shortcuts for common actions.
   #                   * system          - The Windows' system sounds. Things like dings, alerts, etc. are controlled by this.
-  #                   * output          - The system default output device
+  #                   * active          - Whichever window is currently active.
   #                   * input           - The system default input device
+  #                   * output          - The system default output device
   #                   * refreshDevices  - Start a refresh of devices. This should be happening automatically, but here
   #                                       you can trigger a manual refresh if desired.
   #                   * refreshSessions - Start a refresh of audio sessions. This shouldn't be needed generally since it

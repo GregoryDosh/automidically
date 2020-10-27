@@ -6,7 +6,9 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/GregoryDosh/automidically/internal/coreaudio/audiosession"
 	"github.com/GregoryDosh/automidically/internal/coreaudio/device"
@@ -14,6 +16,7 @@ import (
 	"github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/bep/debounce"
 	ole "github.com/go-ole/go-ole"
+	"github.com/mitchellh/go-ps"
 	"github.com/moutend/go-wca/pkg/wca"
 	"github.com/sirupsen/logrus"
 )
@@ -21,6 +24,10 @@ import (
 var (
 	CoreAudioAlreadyInitialized = errors.New("CoInitializeEX returned S_FALSE -> Already initialized on this thread")
 	log                         = logrus.WithField("module", "coreaudio")
+	user32                      = syscall.MustLoadDLL("user32.dll")
+	setWinEventHook             = user32.MustFindProc("SetWinEventHook")
+	unhookWinEvent              = user32.MustFindProc("UnhookWinEvent")
+	getWindowThreadProcessId    = user32.MustFindProc("GetWindowThreadProcessId")
 )
 
 type CoreAudio struct {
@@ -29,6 +36,9 @@ type CoreAudio struct {
 	allDevices                    []*device.Device
 	refreshHardwareDevicesChannel chan bool
 	refreshAudioSessionsChannel   chan bool
+	activeWindowFilename          string
+	activeWindowLock              sync.Mutex
+	activeWindowHandler           uintptr
 	deviceLock                    sync.Mutex
 	deviceEnumerator              *wca.IMMDeviceEnumerator
 	notificationClient            *wca.IMMNotificationClient
@@ -70,8 +80,11 @@ func (ca *CoreAudio) coreAudioEventLoop() {
 	log.Trace("Enter coreAudioEventLoop")
 	defer log.Trace("Exit coreAudioEventLoop")
 
+	// These debounce functions below so that we can drain any channel without having to actually
+	// call the functions an insane amount of times per second. This will require at least X delay
+	// before firing off the specified function.
 	ddev := debounce.New(time.Second * 1)
-	dses := debounce.New(time.Second * 1)
+	dses := debounce.New(time.Millisecond * 500)
 
 	for {
 		select {
@@ -221,8 +234,18 @@ func (ca *CoreAudio) Cleanup() error {
 	if ca.cleanupChan != nil {
 		close(ca.cleanupChan)
 	}
+	if ca.refreshHardwareDevicesChannel != nil {
+		close(ca.refreshHardwareDevicesChannel)
+	}
+	if ca.refreshAudioSessionsChannel != nil {
+		close(ca.refreshAudioSessionsChannel)
+	}
 
 	ca.cleanupDevices()
+
+	if ca.activeWindowHandler > 0 {
+		unhookActiveWindowWinEventHook(ca.activeWindowHandler)
+	}
 	return nil
 }
 
@@ -247,6 +270,18 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 		// refreshSessions
 		if strings.EqualFold(s, "refreshSessions") {
 			ca.refreshAudioSessionsChannel <- true
+		}
+		// active
+		if strings.EqualFold(s, "active") {
+			ca.activeWindowLock.Lock()
+			defer ca.activeWindowLock.Unlock()
+			if ca.outputDevice != nil && ca.activeWindowFilename != "" {
+				if err := ca.outputDevice.SetAudioSessionVolumeLevel(ca.activeWindowFilename, volumeLevel); err != nil {
+					if !errors.Is(err, device.AudioSessionNotFound) {
+						log.Error(err)
+					}
+				}
+			}
 		}
 		// output
 		if strings.EqualFold(s, "output") {
@@ -307,6 +342,29 @@ func (ca *CoreAudio) HandleSystrayMessage(msg systray.Message) {
 	}
 }
 
+// newActiveWindowCallback is passed to Windows to be called whenever the active window changes.
+// When it is called it will attempt to find the process of an associated handle, then get the executable associated with that.
+func (ca *CoreAudio) newActiveWindowCallback(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, idEventThread uint32, dwmsEventTime uint32) (ret uintptr) {
+	ca.activeWindowLock.Lock()
+	defer ca.activeWindowLock.Unlock()
+	if hwnd == 0 {
+		return
+	}
+	pid := getPIDFromHWND(hwnd)
+	if pid == 0 {
+		log.Debugf("unable to find PID from HWND %d", hwnd)
+		return
+	}
+
+	p, err := ps.FindProcess(int(pid))
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	ca.activeWindowFilename = p.Executable()
+	return
+}
+
 // New will create a new CoreAudio interface and start all the event loops and bindings necessasry to inderact with Window's Audio APIs
 func New() (*CoreAudio, error) {
 	// CoInitializeEx must be called at least once, and is usually called only once, for each thread that uses the COM library.
@@ -344,12 +402,21 @@ func New() (*CoreAudio, error) {
 		return nil, err
 	}
 
+	// The windows event hook will allow us to know when the active window has changed.
+	handle, err := setActiveWindowWinEventHook(ca.newActiveWindowCallback)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	ca.activeWindowHandler = handle
+
 	go ca.coreAudioEventLoop()
 	ca.refreshHardwareDevicesChannel <- true
 
 	return ca, nil
 }
 
+// clampValue is for taking the integer values from the MIDI device and clamping it to a given range.
 func clampValue(value, inputMin, inputMax int) int {
 	if value > inputMax {
 		return inputMax
@@ -360,7 +427,36 @@ func clampValue(value, inputMin, inputMax int) int {
 	return value
 }
 
+// mapValue will take an input value along with input range and map it to an output range to allow
+// for nice things like limiting total range output, or reverse a range if desired.
 func mapValue(value, inputMin, inputMax int, outputMin, outputMax float32) float32 {
 	value = int(math.Max(float64(inputMin), math.Min(float64(inputMax), float64(value))))
 	return float32(value-inputMin)/float32(inputMax-inputMin)*float32(outputMax-outputMin) + float32(outputMin)
+}
+
+// getPIDFromHWND will get the PID of a particular HWND
+func getPIDFromHWND(hwnd uintptr) uintptr {
+	var prcsId uintptr = 0
+	ret, _, err := getWindowThreadProcessId.Call(hwnd, uintptr(unsafe.Pointer(&prcsId)))
+	if ret == 0 {
+		log.Error(err)
+		return 0
+	}
+	return prcsId
+}
+
+// setActiveWindowWinEventHook is for informing windows which function should be called whenever a
+// foreground window has changed. https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwineventhook
+func setActiveWindowWinEventHook(callbackFunction func(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, idEventThread uint32, dwmsEventTime uint32) uintptr) (uintptr, error) {
+	ret, _, err := syscall.Syscall9(setWinEventHook.Addr(), 7, 3, 3, 0, syscall.NewCallback(callbackFunction), 0, 0, 3, 0, 0)
+	if ret == 0 {
+		return 0, err
+	}
+	return ret, nil
+}
+
+// unhookActiveWindowWinEventHook will release the hook set by the setActiveWindowWinEventHook above using the returned value
+func unhookActiveWindowWinEventHook(hWinHookEvent uintptr) bool {
+	ret, _, _ := syscall.Syscall(unhookWinEvent.Addr(), 1, hWinHookEvent, 0, 0)
+	return ret != 0
 }
