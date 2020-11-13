@@ -112,8 +112,10 @@ mapping:
   #   * suppressErrors - (boolean) By default errors will pop-up in the log but can be suppressed if desired.
   #   * template       - (boolean) Treat the command as a go template, this means you'll be able to inject the following values
   #                                and use common template language into the command you've specified.
-  #                                * CC    (int) - Control Channel
-  #                                * Value (int) - The value sent by the MIDI device.
+  #                                * CC    (int)           - Control Channel
+  #                                * Value (int)           - The value sent by the MIDI device.
+  #                                * ProcessID (int)       - The Process ID of the active application.
+  #                                * ProcessFilename (int) - The Process Filename of the active application.
   shell:
     # This should cause an error that will pop-up in the log unless you have an ls program installed.
     - cc: 39
@@ -157,7 +159,7 @@ mapping:
         $path = (Get-Process -id $pid).Path
         $balmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
         $balmsg.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::{{ if eq .Value 0 }}Info{{ else }}Warning{{ end }}
-        $balmsg.BalloonTipTitle = "Test Notification"
+        $balmsg.BalloonTipTitle = "Test Notification while in {{ .ProcessFilename }}"
         $balmsg.BalloonTipText = "Message received on {{ .CC }}!"
         $balmsg.Visible = $true
         $balmsg.ShowBalloonTip(2000)
