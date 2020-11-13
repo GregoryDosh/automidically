@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"text/template"
 
+	"github.com/GregoryDosh/automidically/internal/activewindow"
 	sysmsg "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/sirupsen/logrus"
 )
@@ -72,11 +73,16 @@ func (m *Mapping) HandleMIDIMessage(c int, v int) {
 		args = append(args, m.Command...)
 	} else {
 		composed, err := templateToString(m.template, struct {
-			CC    int
-			Value int
-		}{c, v})
+			CC              int
+			Value           int
+			ProcessID       int
+			ProcessFilename string
+		}{c, v, activewindow.ProcessID(), activewindow.ProcessFilename()})
 		if err != nil {
 			log.Error(err)
+			return
+		}
+		if strings.TrimSpace(composed) == "" {
 			return
 		}
 		args = append(args, composed)
