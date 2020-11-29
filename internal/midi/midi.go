@@ -22,11 +22,12 @@ type Device struct {
 }
 
 func (d *Device) Cleanup() error {
-	if d.messageChan != nil {
-		close(d.messageChan)
-	}
 	d.Lock()
 	defer d.Unlock()
+	if d.messageChan != nil {
+		close(d.messageChan)
+		d.messageChan = nil
+	}
 	if d.device != nil {
 		d.device.Close()
 		d.device = nil

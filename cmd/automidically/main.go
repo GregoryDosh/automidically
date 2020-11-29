@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"runtime/pprof"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
+	"github.com/GregoryDosh/automidically/internal/singleinstance"
 	tray "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/GregoryDosh/automidically/internal/toaster"
 	"github.com/getlantern/systray"
@@ -124,6 +126,14 @@ func automidicallyMain(ctx *cli.Context) error {
 			log.Fatal(err)
 		}
 		logrus.AddHook(hook)
+	}
+
+	// Try to only run once
+	if err := singleinstance.GetLock(); err != nil {
+		if errors.Is(err, singleinstance.InstanceAlreadyExistsError) {
+			log.Fatalf("%s is already running, close existing application before starting a new one.", ctx.App.Name)
+		}
+		log.Fatal(err)
 	}
 
 	if profileCPUFilename != "" {
