@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	buildVersion          = "0.5.0"
+	buildVersion          = "0.5.1"
 	defaultLogFilename    = ""
 	configFilename        = ""
 	profileCPUFilename    string
@@ -146,6 +146,14 @@ func automidicallyMain(ctx *cli.Context) error {
 
 	c := configurator.New(configFilename)
 	systray.Run(tray.Start(c.HandleSystrayMessage), func() {})
+
+	if c.MIDIDevice != nil {
+		err := c.MIDIDevice.Cleanup()
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	log.Info("exiting gracefully")
 
 	if profileMemoryFilename != "" {
 		f, err := os.Create(profileMemoryFilename)

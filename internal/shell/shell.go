@@ -12,7 +12,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("module", "shell")
+var (
+	log = logrus.WithField("module", "shell")
+	aw  = activewindow.GetListener()
+)
 
 type Mapping struct {
 	Cc             int      `yaml:"cc"`
@@ -77,7 +80,7 @@ func (m *Mapping) HandleMIDIMessage(c int, v int) {
 			Value           int
 			ProcessID       int
 			ProcessFilename string
-		}{c, v, activewindow.ProcessID(), activewindow.ProcessFilename()})
+		}{c, v, aw.ProcessID(), aw.ProcessFilename()})
 		if err != nil {
 			log.Error(err)
 			return

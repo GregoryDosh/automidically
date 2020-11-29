@@ -201,7 +201,10 @@ func (d *Device) SetAudioSessionVolumeLevel(sessionName string, v float32) error
 	for _, f := range d.audioSessions {
 		if strings.EqualFold(sessionName, f.ProcessExecutable) {
 			if err := f.SetVolumeLevel(v); err != nil {
-				return err
+				if !errors.Is(err, audiosession.ErrorAudioSessionStateExpired) {
+					return err
+				}
+				continue
 			}
 			foundSession = true
 		}
