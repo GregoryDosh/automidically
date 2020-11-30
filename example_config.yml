@@ -163,5 +163,47 @@ mapping:
         $balmsg.Visible = $true
         $balmsg.ShowBalloonTip(2000)
 
+    # Hit an API endpoint with a value from a physical button.
+    # I use this to turn on/off a smart light through the Home-Assistant platform through its API.
+    - cc: 31
+      usePowershell: true
+      template: true
+      command: |
+        {{ if eq .Value 127 }}
+        $URL = 'https://some-home-assistant-or-website/api/services/light/turn_on'
+        {{ else }}
+        $URL = 'https://some-home-assistant-or-website/api/services/light/turn_off'
+        {{ end }}
+        $BRIGHTNESS = [int]({{ .Value }}/127 * 255)
+        $PAYLOAD = @"
+        {
+          "entity_id": "light.desk"
+          {{ if gt .Value 0 }}
+          ,"rgb_color": [255, 255, 255]
+          ,"brightness": $BRIGHTNESS
+          {{ end }}
+        }
+        "@
+        $parameters = @{
+            Uri         = $URL
+            Headers     = @{ 'Authorization' = "Bearer <TOKEN-HERE>" }
+            Method      = 'POST'
+            ContentType = 'application/json'
+            Body        = $PAYLOAD
+        }
+        Invoke-RestMethod @parameters
+
+    # Conditionally calling a script based on the active window.
+    - cc: 32
+      usePowershell: true
+      template: true
+      command: |
+        {{ if eq .ProcessFilename "game1.exe" }}
+          C:\Users\Name\Documents\Scripts\game1.ps1
+        {{ end }}
+        {{ if eq .ProcessFilename "game2.exe" }}
+          C:\Users\Name\Documents\Scripts\game2.ps1
+        {{ end }}
+
 # For debugging/testing purposes you can turn this to true and the log file will contain all of the MIDI events captured.
 echoMIDIEvents: false
