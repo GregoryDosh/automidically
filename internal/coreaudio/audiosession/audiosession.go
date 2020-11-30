@@ -14,7 +14,8 @@ import (
 
 var (
 	log                            = logrus.WithField("module", "coreaudio.audiosession")
-	UninitializedAudioSessionError = errors.New("Audio Session uninitialized")
+	ErrorUninitializedAudioSession = errors.New("audio Session uninitialized")
+	ErrorAudioSessionStateExpired  = errors.New("audio session state expired")
 )
 
 const (
@@ -67,7 +68,7 @@ func (a *AudioSession) SetVolumeLevel(v float32) error {
 	}
 
 	if s == wca.AudioSessionStateExpired {
-		return errors.New("audio session state expired")
+		return ErrorAudioSessionStateExpired
 	}
 
 	return nil

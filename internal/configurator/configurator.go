@@ -2,6 +2,7 @@ package configurator
 
 import (
 	"io/ioutil"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -115,6 +116,8 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 		c.MIDIDevice = midi.New(c.MIDIDeviceName)
 	}
 
+	mappingChanged := false
+
 	// Mixer
 	for _, mapping := range newMapping.Mapping.Mixer {
 		if err := mapping.Validate(); err != nil {
@@ -122,10 +125,18 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 			return
 		}
 	}
-	c.Mapping.Mixer = newMapping.Mapping.Mixer
+	if !reflect.DeepEqual(c.Mapping.Mixer, newMapping.Mapping.Mixer) {
+		mappingChanged = true
+		log.Debug("detected new mixer mappings")
+		c.Mapping.Mixer = newMapping.Mapping.Mixer
+	}
 
 	// Shell
-	c.Mapping.Shell = newMapping.Mapping.Shell
+	if !reflect.DeepEqual(c.Mapping.Shell, newMapping.Mapping.Shell) {
+		mappingChanged = true
+		log.Debug("detected new shell mappings")
+		c.Mapping.Shell = newMapping.Mapping.Shell
+	}
 
 	if c.MIDIDevice != nil {
 		c.MIDIDevice.SetMessageCallback(c.midiMessageCallback)
@@ -135,14 +146,19 @@ func (c *Configurator) readConfigFromDiskAndInit() {
 	c.EchoMIDIEvents = newMapping.EchoMIDIEvents
 
 	log.Debug("completed configuration reload")
-	log.Tracef("%+v", c.Mapping)
+	if mappingChanged {
+		log.Tracef("%+v", c.Mapping)
+	}
 }
 
 func (c *Configurator) midiMessageCallback(cc int, v int) {
 	c.Lock()
 	defer c.Unlock()
 	if c.EchoMIDIEvents {
-		log.Infof("CC: %d, Value: %d", cc, v)
+		log.WithFields(logrus.Fields{
+			"CC":    cc,
+			"Value": v,
+		}).Info()
 	}
 	for _, m := range c.Mapping.Mixer {
 		go func(m mixer.Mapping) {
@@ -163,8 +179,10 @@ func (c *Configurator) HandleSystrayMessage(msg systray.Message) {
 	}
 	if msg == systray.SystrayQuit {
 		log.Trace("Starting cleanup & shutdown procedures.")
-		if err := c.MIDIDevice.Cleanup(); err != nil {
-			log.Error(err)
+		if c.MIDIDevice != nil {
+			if err := c.MIDIDevice.Cleanup(); err != nil {
+				log.Error(err)
+			}
 		}
 		if err := c.coreAudio.Cleanup(); err != nil {
 			log.Error(err)

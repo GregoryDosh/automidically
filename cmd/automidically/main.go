@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"runtime/pprof"
 
 	"github.com/GregoryDosh/automidically/internal/configurator"
+	"github.com/GregoryDosh/automidically/internal/singleinstance"
 	tray "github.com/GregoryDosh/automidically/internal/systray"
 	"github.com/GregoryDosh/automidically/internal/toaster"
 	"github.com/getlantern/systray"
@@ -15,7 +17,7 @@ import (
 )
 
 var (
-	buildVersion          = "0.5.0"
+	buildVersion          = "0.5.1"
 	defaultLogFilename    = ""
 	configFilename        = ""
 	profileCPUFilename    string
@@ -126,6 +128,14 @@ func automidicallyMain(ctx *cli.Context) error {
 		logrus.AddHook(hook)
 	}
 
+	// Try to only run once
+	if err := singleinstance.GetLock(); err != nil {
+		if errors.Is(err, singleinstance.InstanceAlreadyExistsError) {
+			log.Fatalf("%s is already running, close existing application before starting a new one.", ctx.App.Name)
+		}
+		log.Fatal(err)
+	}
+
 	if profileCPUFilename != "" {
 		f, err := os.Create(profileCPUFilename)
 		if err != nil {
@@ -146,6 +156,14 @@ func automidicallyMain(ctx *cli.Context) error {
 
 	c := configurator.New(configFilename)
 	systray.Run(tray.Start(c.HandleSystrayMessage), func() {})
+
+	if c.MIDIDevice != nil {
+		err := c.MIDIDevice.Cleanup()
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	log.Info("exiting gracefully")
 
 	if profileMemoryFilename != "" {
 		f, err := os.Create(profileMemoryFilename)

@@ -22,6 +22,7 @@ import (
 var (
 	CoreAudioAlreadyInitialized = errors.New("CoInitializeEX returned S_FALSE -> Already initialized on this thread")
 	log                         = logrus.WithField("module", "coreaudio")
+	aw                          = activewindow.GetListener()
 )
 
 type CoreAudio struct {
@@ -198,25 +199,37 @@ func (ca *CoreAudio) onDefaultDeviceChanged(flow wca.EDataFlow, role wca.ERole, 
 	} else {
 		log.Trace("detected onDefaultDeviceChanged event: unknown")
 	}
-	ca.refreshHardwareDevicesChannel <- true
+	go func() {
+		ca.refreshHardwareDevicesChannel <- true
+	}()
 	return nil
 }
 
 func (ca *CoreAudio) onDeviceAdded(pwstrDeviceId string) error {
 	log.Trace("detected onDeviceAdded event")
-	ca.refreshHardwareDevicesChannel <- true
+	go func() {
+		ca.refreshHardwareDevicesChannel <- true
+	}()
 	return nil
 }
 
 func (ca *CoreAudio) onDeviceRemoved(pwstrDeviceId string) error {
 	log.Trace("detected onDeviceRemoved event")
-	ca.refreshHardwareDevicesChannel <- true
+	go func() {
+		ca.refreshHardwareDevicesChannel <- true
+	}()
 	return nil
 }
 
 func (ca *CoreAudio) onDeviceStateChanged(pwstrDeviceId string, dwNewState uint64) error {
 	log.Trace("detected onDeviceStateChanged event")
-	ca.refreshHardwareDevicesChannel <- true
+	go func() {
+		ca.refreshHardwareDevicesChannel <- true
+	}()
+	return nil
+}
+
+func (ca *CoreAudio) onPropertyValueChanged(pwstrDeviceId string, key uint64) error {
 	return nil
 }
 
@@ -260,7 +273,7 @@ func (ca *CoreAudio) HandleMIDIMessage(m *mixer.Mapping, c int, v int) {
 		}
 		// active
 		if strings.EqualFold(s, "active") {
-			activeWindowFilename := activewindow.ProcessFilename()
+			activeWindowFilename := aw.ProcessFilename()
 			if ca.outputDevice != nil && activeWindowFilename != "" {
 				if err := ca.outputDevice.SetAudioSessionVolumeLevel(activeWindowFilename, volumeLevel); err != nil {
 					if !errors.Is(err, device.AudioSessionNotFound) {
@@ -359,6 +372,7 @@ func New() (*CoreAudio, error) {
 		OnDeviceAdded:          ca.onDeviceAdded,
 		OnDeviceRemoved:        ca.onDeviceRemoved,
 		OnDeviceStateChanged:   ca.onDeviceStateChanged,
+		OnPropertyValueChanged: ca.onPropertyValueChanged,
 	})
 
 	if err := ca.deviceEnumerator.RegisterEndpointNotificationCallback(ca.notificationClient); err != nil {
