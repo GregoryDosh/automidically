@@ -23,7 +23,9 @@ Build the application using the [build script](scripts/build.bat) and start it t
 `profile_cpu` - A filepath to log the cpu.pprof information from Golang. Default is empty, which disables this from happening.
 `profile_memory` - A filepath to log the memory.pprof information from Golang. Default is empty, which disables this from happening.
 
+## Known Issues
+- I believe it a bug in either rtmidi (via gitlab.com/gomidi/rtmididrv) or the library itself, but if you run AutoMIDIcally as an administrator then your computer has a chance that it won't go to sleep properly and will hang/crash instead. At least it does for me, even removing all of the components of this repo and running their example directly hooked to real device and it stops my computer from sleeping when run as an admin.
 
 ## Future Ideas
-Going to be also looking into triggering automation/scripts/hooks into other applications using MIDI buttons too.
-Reuse existing hardware to replicate a stream deck like setup. Hooking into something like an OBS websocket?
+- Going to be also looking into triggering automation/scripts/hooks into other applications using MIDI buttons too. (Most of this can just be done with the shell component and powershell commands ATM)
+- Reuse existing hardware to replicate a stream deck like setup. Hooking into something like an OBS websocket?
