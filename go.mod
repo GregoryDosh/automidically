@@ -8,6 +8,7 @@ require (
 	github.com/getlantern/systray v1.1.0
 	github.com/go-ole/go-ole v1.2.4
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4
+	github.com/lxn/walk v0.0.0-20201125094449-2a61ddb5a2b8
 	github.com/lxn/win v0.0.0-20201111105847-2a20daff6a55
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/moutend/go-wca v0.2.0
@@ -18,6 +19,7 @@ require (
 	gitlab.com/gomidi/midi v1.20.2
 	gitlab.com/gomidi/rtmididrv v0.10.1
 	golang.org/x/sys v0.0.0-20201126233918-771906719818
+	gopkg.in/Knetic/govaluate.v3 v3.0.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )

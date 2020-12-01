@@ -172,6 +172,7 @@ func (ca *CoreAudio) refreshHardwareDevices() {
 		log.Error(err)
 	}
 
+	deviceNames := []string{}
 	for i := uint32(0); i < deviceCount; i++ {
 		var mmd *wca.IMMDevice
 		if err := deviceCollection.Item(i, &mmd); err != nil {
@@ -184,11 +185,12 @@ func (ca *CoreAudio) refreshHardwareDevices() {
 			continue
 		}
 		if dn, err := d.DeviceName(); err == nil {
+			deviceNames = append(deviceNames, dn)
 			log.Debugf("found device named '%s'", dn)
 		}
 		ca.allDevices = append(ca.allDevices, d)
 	}
-
+	systray.SetAudioDevices(deviceNames)
 }
 
 func (ca *CoreAudio) onDefaultDeviceChanged(flow wca.EDataFlow, role wca.ERole, pwstrDeviceId string) error {
@@ -199,33 +201,25 @@ func (ca *CoreAudio) onDefaultDeviceChanged(flow wca.EDataFlow, role wca.ERole, 
 	} else {
 		log.Trace("detected onDefaultDeviceChanged event: unknown")
 	}
-	go func() {
-		ca.refreshHardwareDevicesChannel <- true
-	}()
+	ca.refreshHardwareDevicesChannel <- true
 	return nil
 }
 
 func (ca *CoreAudio) onDeviceAdded(pwstrDeviceId string) error {
 	log.Trace("detected onDeviceAdded event")
-	go func() {
-		ca.refreshHardwareDevicesChannel <- true
-	}()
+	ca.refreshHardwareDevicesChannel <- true
 	return nil
 }
 
 func (ca *CoreAudio) onDeviceRemoved(pwstrDeviceId string) error {
 	log.Trace("detected onDeviceRemoved event")
-	go func() {
-		ca.refreshHardwareDevicesChannel <- true
-	}()
+	ca.refreshHardwareDevicesChannel <- true
 	return nil
 }
 
 func (ca *CoreAudio) onDeviceStateChanged(pwstrDeviceId string, dwNewState uint64) error {
 	log.Trace("detected onDeviceStateChanged event")
-	go func() {
-		ca.refreshHardwareDevicesChannel <- true
-	}()
+	ca.refreshHardwareDevicesChannel <- true
 	return nil
 }
 
