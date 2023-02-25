@@ -18,7 +18,7 @@ require (
 	github.com/urfave/cli/v2 v2.3.0
 	gitlab.com/gomidi/midi v1.20.2
 	gitlab.com/gomidi/rtmididrv v0.10.1
-	golang.org/x/sys v0.0.0-20201126233918-771906719818
+	golang.org/x/sys v0.1.0
 	gopkg.in/Knetic/govaluate.v3 v3.0.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
